@@ -20,7 +20,7 @@ module control_ms
   implicit none
 contains
 subroutine main
-  use Global_Variables_ ! This modification causes fatal error!
+  use Global_Variables_ ! This modification raises error!
   use timer
   use opt_variables
   use environment
