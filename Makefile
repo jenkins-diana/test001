@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall
 
-all: bin001 bin002 
+all: bin001 bin002 bin003
 
 bin001: code001/main.c
 	$(CC) -o $@ $^ $(CLFAGS)
