@@ -33,9 +33,9 @@ module salmon_communication
   public :: comm_irecv
   public :: comm_wait
   public :: comm_wait_all
-  !public :: comm_send_init
-  !public :: comm_recv_init
-  !public :: comm_start_all
+  public :: comm_send_init
+  public :: comm_recv_init
+  public :: comm_start_all
 
   ! collective communication
   public :: comm_sync_all
@@ -101,6 +101,26 @@ module salmon_communication
     module procedure comm_irecv_array5d_dcomplex
   end interface
 
+  interface comm_send_init
+    ! 3-D array
+    module procedure comm_send_init_array3d_double
+    module procedure comm_send_init_array3d_dcomplex
+
+    ! 5-D array
+    module procedure comm_send_init_array5d_double
+    module procedure comm_send_init_array5d_dcomplex
+  end interface
+
+  interface comm_recv_init
+    ! 3-D array
+    module procedure comm_recv_init_array3d_double
+    module procedure comm_recv_init_array3d_dcomplex
+
+    ! 5-D array
+    module procedure comm_recv_init_array5d_double
+    module procedure comm_recv_init_array5d_dcomplex
+  end interface
+
   interface comm_summation
     ! scalar
     module procedure comm_summation_integer
@@ -125,6 +145,10 @@ module salmon_communication
     ! 4-D array
     module procedure comm_summation_array4d_double
     module procedure comm_summation_array4d_dcomplex
+  
+    ! 5-D array
+    module procedure comm_summation_array5d_double
+    module procedure comm_summation_array5d_dcomplex
   end interface
 
   interface comm_bcast
@@ -146,6 +170,11 @@ module salmon_communication
     ! 3-D array
     module procedure comm_bcast_array3d_double
     module procedure comm_bcast_array3d_dcomplex
+
+    ! 4-D array
+    module procedure comm_bcast_array4d_double
+    ! module procedure comm_bcast_array3d_dcomplex
+    !! TODO: create broadcast routine for rank-4 tensor later ...
   end interface
 
   interface comm_allgatherv
@@ -429,6 +458,109 @@ contains
   end subroutine
 
 
+  function comm_send_init_array3d_double(invalue, ndest, ntag, ngroup) result(req)
+    implicit none
+    real(8), intent(in) :: invalue(:,:,:)
+    integer, intent(in) :: ndest, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(invalue)
+    UNUSED_VARIABLE(ndest)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_send_init_array3d_dcomplex(invalue, ndest, ntag, ngroup) result(req)
+    implicit none
+    complex(8), intent(in) :: invalue(:,:,:)
+    integer, intent(in)    :: ndest, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(invalue)
+    UNUSED_VARIABLE(ndest)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_send_init_array5d_double(invalue, ndest, ntag, ngroup) result(req)
+    implicit none
+    real(8), intent(in) :: invalue(:,:,:,:,:)
+    integer, intent(in) :: ndest, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(invalue)
+    UNUSED_VARIABLE(ndest)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_send_init_array5d_dcomplex(invalue, ndest, ntag, ngroup) result(req)
+    implicit none
+    complex(8), intent(in) :: invalue(:,:,:,:,:)
+    integer, intent(in)    :: ndest, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(invalue)
+    UNUSED_VARIABLE(ndest)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_recv_init_array3d_double(outvalue, nsrc, ntag, ngroup) result(req)
+    implicit none
+    real(8), intent(out) :: outvalue(:,:,:)
+    integer, intent(in)  :: nsrc, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(outvalue)
+    UNUSED_VARIABLE(nsrc)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_recv_init_array3d_dcomplex(outvalue, nsrc, ntag, ngroup) result(req)
+    implicit none
+    complex(8), intent(out) :: outvalue(:,:,:)
+    integer, intent(in)     :: nsrc, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(outvalue)
+    UNUSED_VARIABLE(nsrc)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_recv_init_array5d_double(outvalue, nsrc, ntag, ngroup) result(req)
+    implicit none
+    real(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)  :: nsrc, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(outvalue)
+    UNUSED_VARIABLE(nsrc)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  function comm_recv_init_array5d_dcomplex(outvalue, nsrc, ntag, ngroup) result(req)
+    implicit none
+    complex(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)     :: nsrc, ntag, ngroup
+    integer :: req
+    UNUSED_VARIABLE(outvalue)
+    UNUSED_VARIABLE(nsrc)
+    UNUSED_VARIABLE(ntag)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(req)
+  end function
+
+  subroutine comm_start_all(reqs)
+    implicit none
+    integer, intent(in) :: reqs(:)
+    UNUSED_VARIABLE(reqs)
+  end subroutine
+
+
   subroutine comm_summation_integer(invalue, outvalue, ngroup, dest)
     implicit none
     integer, intent(in)  :: invalue
@@ -594,6 +726,29 @@ contains
     outvalue = invalue
   end subroutine
 
+  subroutine comm_summation_array5d_double(invalue, outvalue, N, ngroup, dest)
+    implicit none
+    real(8), intent(in)  :: invalue(:,:,:,:,:)
+    real(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)  :: N, ngroup
+    integer, optional, intent(in) :: dest
+    UNUSED_VARIABLE(N)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(dest)
+    outvalue = invalue
+  end subroutine
+
+  subroutine comm_summation_array5d_dcomplex(invalue, outvalue, N, ngroup, dest)
+    implicit none
+    complex(8), intent(in)  :: invalue(:,:,:,:,:)
+    complex(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)     :: N, ngroup
+    integer, optional, intent(in) :: dest
+    UNUSED_VARIABLE(N)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(dest)
+    outvalue = invalue
+  end subroutine
 
   subroutine comm_bcast_integer(val, ngroup, root)
     implicit none
@@ -704,7 +859,18 @@ contains
     UNUSED_VARIABLE(root)
     ! do nothing
   end subroutine
-
+  
+  subroutine comm_bcast_array4d_double(val, ngroup, root)
+    implicit none
+    real(8), intent(inout)        :: val(:,:,:,:)
+    integer, intent(in)           :: ngroup
+    integer, intent(in), optional :: root
+    UNUSED_VARIABLE(val)
+    UNUSED_VARIABLE(ngroup)
+    UNUSED_VARIABLE(root)
+    ! do nothing
+  end subroutine
+  
   subroutine comm_bcast_array1d_character(val, ngroup, root)
     implicit none
     character(*), intent(inout)        :: val(:)

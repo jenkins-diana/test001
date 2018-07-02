@@ -1,7 +1,6 @@
 set(SOURCES
     dt_evolve.f90
     current.f90
-    k_shift_wf.f90
     init_Ac.f90
     Fourier_tr.f90
     )

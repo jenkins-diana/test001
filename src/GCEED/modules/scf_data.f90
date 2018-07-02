@@ -15,6 +15,7 @@
 !
 MODULE scf_data
 use salmon_global
+use salmon_xc, only: xc_functional
 implicit none
 !-------------------- Parameters
 integer, parameter :: maxntmg=10
@@ -103,6 +104,9 @@ real(8) :: cNmat(0:12,0:12),bNmat(0:12,0:12)
 
 !-------------------- Global variables
 
+! Exchange Correlation
+type(xc_functional) :: xc_func
+
 integer :: iflag_ps
 
 integer :: inumcpu_check
@@ -141,6 +145,7 @@ integer :: ilsda
 integer :: iflag_stopt
 integer :: iter_stopt
 integer :: istopt
+integer :: istopt_tranc
 
 integer :: MST(2),ifMST(2),itotMST
 integer :: itotfMST
@@ -160,17 +165,18 @@ real(8) :: rLsize(3,maxntmg)    ! size of the box
 integer :: maxMps
 
 ! Pseudopotential
-integer,allocatable :: Jxyz(:,:,:),Mps(:),Jxxyyzz(:,:,:)
+integer,allocatable :: Jxyz_all(:,:,:),Mps_all(:),Jxxyyzz_all(:,:,:)
+integer,allocatable :: Mps(:)
 integer,allocatable :: Jxyz_tmp1(:,:,:)
 integer,allocatable :: Jxyz_tmp2(:,:,:)
 integer,allocatable :: Jxxyyzz_tmp1(:,:,:)
 integer,allocatable :: Jxxyyzz_tmp2(:,:,:)
-integer,allocatable :: Jxxyyzz2nd(:,:,:)
+integer,allocatable :: Jxxyyzz(:,:,:)
 integer :: Mlmps
 integer :: Mlps(maxMKI),Lref(maxMKI)
 real(8),allocatable :: Vpsl(:,:,:)                 ! Local pseudopotential
 real(8),allocatable :: Vpsl_atom(:,:,:,:)
-real(8),allocatable :: uV(:,:,:),uVu(:,:)          ! Non-local
+real(8),allocatable :: uV_all(:,:,:),uVu(:,:)          ! Non-local
 
 real(8),allocatable :: rocc(:,:)                    ! Occupation number
 real(8),allocatable :: psi(:,:,:,:,:)              ! Single particle orbitals
@@ -198,6 +204,7 @@ real(8),allocatable :: elf(:,:,:)
 complex(8),allocatable :: zpsi(:,:,:,:,:)
 complex(8),allocatable :: zpsi_in(:,:,:,:,:),zpsi_out(:,:,:,:,:)
 complex(8),allocatable :: zpsi_t0(:,:,:,:,:)
+complex(8),allocatable :: ttpsi(:,:,:)
 integer :: iSCFRT
 
 real(8),allocatable :: Vbox(:,:,:)
@@ -214,14 +221,6 @@ integer :: iwk2sta(3),iwk2end(3),iwk2num(3)
 integer :: iwk3sta(3),iwk3end(3),iwk3num(3)
 integer :: iwk_size
 
-integer :: numcoo
-integer,allocatable :: jMps_l(:,:)
-integer,allocatable :: max_jMps_l(:)
-
-integer :: numcoo_s
-integer,allocatable :: jMps_l_s(:,:)
-integer,allocatable :: max_jMps_l_s(:)
-
 integer :: maxlm
 
 integer :: imesh_oddeven(3)
@@ -232,6 +231,7 @@ complex(8), allocatable :: zc(:)
 real(8), allocatable :: Dp(:,:), Dp2(:,:,:)
 real(8), allocatable :: Qp(:,:,:), Qp2(:,:,:,:)
 real(8), allocatable :: rIe(:), rIe2(:,:)
+real(8), allocatable :: tene(:)
 real(8) :: vecDs(3)
 real(8),allocatable :: vecDs2(:,:)
 real(8) :: vecQs(3,3)
@@ -242,8 +242,6 @@ integer :: num_pole
 integer :: itotNtime
 
 integer :: num_datafiles_OUT2
-
-integer :: iflag_hartree
 
 real(8),allocatable :: Gs(:,:,:),Gl(:,:,:)
 complex(8),allocatable :: tx_exp(:,:),ty_exp(:,:),tz_exp(:,:)
@@ -260,7 +258,12 @@ real(8),allocatable :: gridcoo(:,:)
 
 integer :: iobnum
 
+integer :: k_sta,k_end,k_num
+
 integer :: kx_hock_sta(3),kx_hock_end(3),kx_hock_num(3)
+
+integer :: num_kpoints_3d(3)
+integer :: num_kpoints_rd
 
 real(8),allocatable :: wtk(:)
 
@@ -334,22 +337,12 @@ character(100):: rtELFOutFile
 character(100):: file_Projection
 character(20):: fileNumber
 
-integer,allocatable :: Jxyz2nd(:,:,:)
-real(8),allocatable :: uV2nd(:,:,:)
+integer,allocatable :: Jxyz(:,:,:)
+real(8),allocatable :: uV(:,:,:)
 
 integer,allocatable :: numatom_ps(:,:,:)
 integer,allocatable :: iatomnum_ps(:,:,:,:)
-integer,allocatable :: Jxyz_all(:,:)
 integer :: maxMps_all
-integer,allocatable :: Mps3rd(:,:,:,:)
-
-integer :: jamax
-integer,allocatable :: Jxyz_all_2nd(:,:)
-integer,allocatable :: iatomnum_ps_2nd(:)
-integer,allocatable :: Mps3rd_2nd(:)
-integer,allocatable :: jja(:,:)
-integer :: MImax
-integer,allocatable :: numatom_ps_2nd(:)
 
 real(8), allocatable :: rho_n(:,:,:)
 real(8), allocatable :: Vh_n(:,:,:)
@@ -357,6 +350,10 @@ real(8), allocatable :: Vh0(:,:,:)
 complex(8), allocatable :: zpsi_n(:,:,:,:,:)
 
 complex(8), allocatable :: Ex_static(:,:,:),Ey_static(:,:,:),Ez_static(:,:,:)
+
+real(8),allocatable :: curr(:,:) 
+real(8),allocatable :: sumcurr(:,:)
+real(8),allocatable :: rE_ind(:,:)
 
 integer :: ilasbound_sta(3),ilasbound_end(3)
 real(8) :: rlaser_center(3)
@@ -385,16 +382,20 @@ real(8),allocatable :: dRion(:,:,:)
 real(8),allocatable :: Rion_eq(:,:)
 real(8),parameter :: umass=1822.9d0
 
-real(8),allocatable :: Eeff_dip(:,:,:,:)  
-real(8),allocatable :: Eeff_dip0(:,:,:,:)  
-
 integer :: wmaxMI
-
-real(8) :: rad_diele
 
 real(8) :: fcN(0:12)
 real(8) :: fbN(0:12)
 
+real(8),allocatable :: k_rd(:,:),ksquare(:)
+real(8),allocatable :: k_rd0(:,:),ksquare0(:)
+
+real(8),allocatable :: A_ext(:,:)
+real(8),allocatable :: A_ind(:,:)
+real(8),allocatable :: A_tot(:,:)
+real(8),allocatable :: E_ext(:,:)
+real(8),allocatable :: E_ind(:,:)
+real(8),allocatable :: E_tot(:,:)
 
 integer,allocatable :: oblist(:)
 
@@ -417,12 +418,18 @@ integer :: iflag_pdos
 
 integer :: iflag_ELF
 
+integer :: iflag_indA
+
+real(8),allocatable :: vonf_sd(:,:,:),eonf_sd(:,:,:,:)
+
 !filename
 character(100) :: file_OUT
 character(100) :: file_IN
 character(100) :: LDA_Info
+character(100) :: file_eigen
 character(100) :: file_RT
-character(100) :: file_alpha
+character(100) :: file_alpha_lr
+character(100) :: file_alpha_pulse
 character(100) :: file_RT_q
 character(100) :: file_alpha_q
 character(100) :: file_RT_e

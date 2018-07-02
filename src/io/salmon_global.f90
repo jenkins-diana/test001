@@ -18,11 +18,11 @@ module salmon_global
   implicit none
 
 !Parameters for pseudo-potential
-  integer, parameter :: maxMKI=10
-  integer :: MI,MKI
+  integer, parameter :: maxmki=10
+  integer :: mi,mki
    !shinohara
-  integer :: ipsfileform(maxMKI)   ! file format for pseudo potential
-  character(16)  :: ps_format(maxMKI)
+  integer :: ipsfileform(maxmki)   ! file format for pseudo potential
+  character(16)  :: ps_format(maxmki)
 ! List of pseudopotential file formats
   integer,parameter :: n_Yabana_Bertsch_psformat = 1 !.rps
   integer,parameter :: n_ABINIT_psformat = 2 ! .pspnc
@@ -39,6 +39,7 @@ module salmon_global
 !! &calculation
   character(16)  :: calc_mode
   character(1)   :: use_ehrenfest_md
+  character(1)   :: use_adiabatic_md
   character(1)   :: use_ms_maxwell
   character(1)   :: use_force
   character(1)   :: use_geometry_opt
@@ -50,7 +51,16 @@ module salmon_global
   character(256) :: sysname
   character(256) :: directory
   character(256) :: dump_filename
-                 
+  character(20)  :: modify_gs_wfn_k
+  character(1)   :: read_gs_wfn_k
+  character(1)   :: read_rt_wfn_k
+  character(1)   :: write_gs_wfn_k
+  character(1)   :: write_rt_wfn_k
+  character(1)   :: read_gs_wfn_k_ms
+  character(1)   :: read_rt_wfn_k_ms
+  character(1)   :: write_gs_wfn_k_ms
+  character(1)   :: write_rt_wfn_k_ms
+
 !! &units
   character(16)  :: unit_system
   character(16)  :: unit_time
@@ -60,6 +70,7 @@ module salmon_global
                  
 !! &parallel
   character(1)   :: domain_parallel
+  integer        :: nproc_k
   integer        :: nproc_ob
   integer        :: nproc_domain(3)
   integer        :: nproc_domain_s(3)
@@ -83,18 +94,24 @@ module salmon_global
   character(256) :: file_atom_red_coor
 
 !! &pseudo
-  character(256) :: pseudo_file(maxMKI)
-  integer        :: Lmax_ps(maxMKI)
-  integer        :: Lloc_ps(maxMKI)
-  integer        :: iZatom(maxMKI)
+  character(256) :: pseudo_file(maxmki)
+  integer        :: lmax_ps(maxmki)
+  integer        :: lloc_ps(maxmki)
+  integer        :: izatom(maxmki)
   character(1)   :: psmask_option
   real(8)        :: alpha_mask
   real(8)        :: gamma_mask
   real(8)        :: eta_mask
 
 !! &functional
-  character(32)  :: xc
+  character(64)  :: xc !, xcname
+  character(64)  :: xname
+  character(64)  :: cname
+  character(64)  :: alibx
+  character(64)  :: alibc
+  character(64)  :: alibxc
   real(8)        :: cval
+  character(1)   :: no_update_func
 
 !! &rgrid
   real(8)        :: dl(3)
@@ -125,9 +142,12 @@ module salmon_global
   integer        :: nscf
   integer        :: ngeometry_opt
   character(1)   :: subspace_diagonalization
-  character(8)   :: convergence
+  character(16)  :: convergence
   real(8)        :: threshold
-  real(8)        :: threshold_pot
+  real(8)        :: threshold_norm_rho
+  real(8)        :: threshold_norm_pot
+  character(1)   :: omp_loop
+  character(1)   :: skip_gsortho
 
 !! &emfield
   character(2)   :: trans_longi
@@ -149,11 +169,16 @@ module salmon_global
   real(8)        :: epdir_im2(3)
   real(8)        :: phi_cep2
   real(8)        :: t1_t2
+  real(8)        :: t1_delay
   character(1)   :: quadrupole
   character(8)   :: quadrupole_pot
   character(1)   :: alocal_laser
   real(8)        :: rlaserbound_sta(3)
   real(8)        :: rlaserbound_end(3)
+  integer        :: nump
+  real(8)        :: vecp(3,2)
+  real(8)        :: coop(3,2)
+  real(8)        :: radp_diele
 
 !! &multiscale
   character(16)  :: fdtddim
@@ -164,13 +189,25 @@ module salmon_global
   real(8)        :: hx_m
   real(8)        :: hy_m
   real(8)        :: hz_m
-  integer        :: nksplit
-  integer        :: nxysplit
-  integer        :: nxvacl_m
+  integer        :: nksplit !! TODO: remove this variable
+  integer        :: nxysplit !! TODO: remove this variable
+  ! The input variables nxvac(l|r)_m do not recommend to use,
+  ! However I tempolary remain them for the reason of the compatibility.
+  ! Please use  n(x|y|z)_origin_m to provide the same functionality.
+  integer        :: nxvacl_m 
   integer        :: nxvacr_m
-
+  integer        :: nx_origin_m
+  integer        :: ny_origin_m
+  integer        :: nz_origin_m
+  character(100) :: file_macropoint
+  integer        :: num_macropoint
+  character(1)   :: set_ini_coor_vel
+  integer        :: nmacro_write_group
+  !! TODO: remove num_macropoint later
+  
 !! &analysis
   character(2)   :: projection_option
+  character(4)   :: projection_decomp
   integer        :: nenergy
   real(8)        :: de
   character(1)   :: out_psi
@@ -183,13 +220,21 @@ module salmon_global
   character(1)   :: out_dos_fshift
   character(1)   :: out_pdos
   character(1)   :: out_dns
-  character(1)   :: out_elf
+  character(1)   :: out_old_dns
   character(1)   :: out_dns_rt
   integer        :: out_dns_rt_step
+  character(1)   :: out_dns_trans
+  real(8)        :: out_dns_trans_energy
+  character(1)   :: out_elf
   character(1)   :: out_elf_rt
   integer        :: out_elf_rt_step
   character(1)   :: out_estatic_rt
   integer        :: out_estatic_rt_step
+  character(1)   :: out_rvf_rt
+  integer        :: out_rvf_rt_step
+  character(1)   :: out_tm
+  integer        :: out_projection_step
+  integer        :: out_ms_step
   character(16)  :: format3d
   integer        :: numfiles_out_3d
   character(1)   :: timer_process
@@ -201,6 +246,29 @@ module salmon_global
 !! &ewald
   integer        :: newald
   real(8)        :: aewald
+
+!! &opt
+  real(8)        :: cg_alpha_ini
+  real(8)        :: cg_alpha_up
+  real(8)        :: cg_alpha_down
+  real(8)        :: convrg_scf_force
+  real(8)        :: convrg_scf_ene
+  real(8)        :: convrg_opt_fmax
+  real(8)        :: convrg_opt_ene
+
+!! &md
+  character(10)  :: ensemble
+  character(20)  :: thermostat
+  integer        :: step_velocity_scaling
+  integer        :: step_update_ps
+  integer        :: step_update_ps2
+  real(8)        :: temperature0_ion
+  character(1)   :: set_ini_velocity
+  character(256) :: file_ini_velocity
+  character(256) :: file_set_shake
+  real(8)        :: thermostat_tau
+  real(8)        :: friction
+  character(1)   :: stop_system_momt
 
 !! &group_fundamental
   integer        :: iditerybcg
@@ -252,13 +320,15 @@ module salmon_global
   integer        :: iwdenoption
   integer        :: iwdenstep
   integer        :: iflag_estatic
+  integer        :: iflag_hartree
 
 !! &atomic_coor
 !! &atomic_red_coor
-integer,allocatable :: Kion(:)    
-real(8),allocatable :: Rion(:,:)  
-real(8),allocatable :: Rion_red(:,:)  
+integer,allocatable :: kion(:)    
+real(8),allocatable :: rion(:,:)  
+real(8),allocatable :: rion_red(:,:)  
 character(1),allocatable :: flag_geo_opt_atom(:)
+character(256),allocatable :: atom_name(:)
 
 
 end module salmon_global

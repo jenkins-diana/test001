@@ -97,11 +97,15 @@ contains
 
   subroutine hpsi_omp_KB_base(ik,tpsi,htpsi,ttpsi)
     use timer
-    use Global_Variables, only: NLx,NLy,NLz,kAc,lapx,lapy,lapz,nabx,naby,nabz,Vloc,Mps,uV,iuV,Hxyz,ekr_omp,Nlma,a_tbl
-    use opt_variables, only: lapt,PNLx,PNLy,PNLz,PNL
+    use Global_Variables, only: NLx,NLy,NLz,kAc,lapx,lapy,lapz,nabx,naby,nabz,Vloc,Mps,iuV,Hxyz,Nlma,zproj, & 
+    & flag_set_ini_Ac_alocal, Ac2_al,Ac1x_al,Ac1y_al,Ac1z_al,nabt_al
+    use opt_variables, only: lapt,PNLx,PNLy,PNLz,PNL,spseudo,dpseudo
 #ifdef ARTED_USE_NVTX
     use nvtx
 #endif
+    use salmon_parallel, only: get_thread_id
+    use salmon_global, only: alocal_laser
+    use Ac_alocal_laser
     implicit none
     integer,intent(in)              :: ik
     complex(8),intent(in)           ::  tpsi(0:PNLz-1,0:PNLy-1,0:PNLx-1)
@@ -109,6 +113,7 @@ contains
     complex(8),intent(out),optional :: ttpsi(0:PNLz-1,0:PNLy-1,0:PNLx-1)
     real(8) :: k2,k2lap0_2
     real(8) :: nabt(12)
+    integer :: tid
 
     NVTX_BEG('hpsi1()',3)
 
@@ -120,13 +125,17 @@ contains
 
     LOG_BEG(LOG_HPSI_STENCIL)
       call hpsi1_RT_stencil(k2lap0_2,Vloc,lapt,nabt,tpsi,htpsi)
+      if(alocal_laser=='y' .and. flag_set_ini_Ac_alocal)then
+         call hpsi1_RT_stencil_add_Ac_alocal(Ac2_al(:,ik),Ac1x_al,Ac1y_al,Ac1z_al,nabt_al,tpsi,htpsi)
+      endif
       if (present(ttpsi)) then
         call subtraction(Vloc,tpsi,htpsi,ttpsi)
       end if
     LOG_END(LOG_HPSI_STENCIL)
 
     LOG_BEG(LOG_HPSI_PSEUDO)
-      call pseudo_pt(ik,tpsi,htpsi)
+      tid = get_thread_id()
+      call pseudo_pt(ik,zproj(:,:,ik),tpsi,htpsi,spseudo(:,tid),dpseudo(:,tid))
     LOG_END(LOG_HPSI_PSEUDO)
 
     NVTX_END()
@@ -150,34 +159,52 @@ contains
       end do
     end subroutine
 
-    subroutine pseudo_pt(ik,tpsi,htpsi)
-#ifdef ARTED_STENCIL_PADDING
-      use opt_variables, only: zJxyz => zKxyz
-#else
-      use opt_variables, only: zJxyz
-#endif
+    !Calculating nonlocal part
+    subroutine pseudo_pt(ik,zproj,tpsi,htpsi,spseudo,dpseudo)
+      use opt_variables, only: NPI,pseudo_start_idx,idx_proj,nprojector,idx_lma
+      use global_variables, only: NI,Nps
       implicit none
       integer,    intent(in)  :: ik
+      complex(8), intent(in)  :: zproj(Nps,Nlma)
       complex(8), intent(in)  :: tpsi(0:PNL-1)
       complex(8), intent(out) :: htpsi(0:PNL-1)
-      integer    :: ilma,ia,j,i
+      complex(8)              :: spseudo(NPI),dpseudo(NPI) ! working mem.
+
+      integer    :: ia,i,j,ip,ioffset
       complex(8) :: uVpsi
 
-      !Calculating nonlocal part
-      do ilma=1,Nlma
-        ia=a_tbl(ilma)
-        uVpsi=0.d0
+      dpseudo = cmplx(0.d0)
+
+      ! gather (load) pseudo potential point
+      do i=1,NPI
+        spseudo(i) = tpsi(idx_proj(i))
+      end do
+
+      do ia=1,NI
+      do ip=1,nprojector(ia)
+        i = idx_lma(ia) + ip
+
+        ! summarize vector
+        uVpsi   = 0.d0
+        ioffset = pseudo_start_idx(ia)
         do j=1,Mps(ia)
-          i=zJxyz(j,ia)
-          uVpsi=uVpsi+uV(j,ilma)*ekr_omp(j,ia,ik)*tpsi(i)
+          uVpsi = uVpsi + conjg(zproj(j,i)) * spseudo(ioffset+j)
         end do
-        uVpsi=uVpsi*Hxyz*iuV(ilma)
-!dir$ ivdep
+        uVpsi = uVpsi * Hxyz * iuV(i)
+
+        ! apply vector
+        ioffset = pseudo_start_idx(ia)
         do j=1,Mps(ia)
-          i=zJxyz(j,ia)
-          htpsi(i)=htpsi(i)+conjg(ekr_omp(j,ia,ik))*uVpsi*uV(j,ilma)
+          dpseudo(ioffset+j) = dpseudo(ioffset+j) + zproj(j,i) * uVpsi
         end do
+      end do
+      end do
+
+      ! scatter (store) pseudo potential point
+      do i=1,NPI
+        htpsi(idx_proj(i)) = htpsi(idx_proj(i)) + dpseudo(i)
       end do
     end subroutine
   end subroutine
 end module
+

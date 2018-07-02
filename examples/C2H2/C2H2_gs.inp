@@ -16,14 +16,14 @@
   nelec = 10
 /
 &pseudo
-  iZatom(1)=6
-  iZatom(2)=1
+  izatom(1)=6
+  izatom(2)=1
   pseudo_file(1)='C_rps.dat'
   pseudo_file(2)='H_rps.dat'
-  Lmax_ps(1)=1
-  Lmax_ps(2)=0
-  Lloc_ps(1)=1
-  Lloc_ps(2)=0
+  lmax_ps(1)=1
+  lmax_ps(2)=0
+  lloc_ps(1)=1
+  lloc_ps(2)=0
 /
 &rgrid
   dl = 0.25d0, 0.25d0, 0.25d0
@@ -31,6 +31,11 @@
 &scf
   ncg = 4
   nscf = 1000
+  convergence = 'norm_rho_dng'
+  threshold_norm_rho = 1.d-15
+/
+&functional
+  xc = 'PZ'
 /
 &atomic_coor
 'C'    0.000000    0.000000    0.599672  1

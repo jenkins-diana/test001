@@ -24,13 +24,22 @@ contains
     use timer
     use salmon_parallel, only: nproc_id_global
     use salmon_communication, only: comm_bcast, comm_sync_all, comm_is_root
+    use broyden_sub
+    use io_gs_wfn_k, only: iflag_read,read_write_gs_wfn_k
+    use salmon_xc, only: init_xc, finalize_xc
     implicit none
     integer :: iter, ik, ib, ia
-    character(10) :: functional_t
+    ! character(10) :: functional_t
+    real(8) :: fave,fave_prev
+    logical :: flag_functional_override
 
     allocate(rho_in(1:NL,1:Nscf+1),rho_out(1:NL,1:Nscf+1))
     rho_in(1:NL,1:Nscf+1)=0.d0; rho_out(1:NL,1:Nscf+1)=0.d0
-    allocate(Eall_GS(0:Nscf),esp_var_ave(1:Nscf),esp_var_max(1:Nscf),dns_diff(1:Nscf))
+    allocate(Eall_GS(0:Nscf),esp_var_ave(1:Nscf),esp_var_max(1:Nscf), &
+             ddns(1:Nscf),ddns_abs_1e(1:Nscf))
+    Eall_GS(0:Nscf)=0d0; 
+    esp_var_ave(1:Nscf)=0d0; esp_var_max(1:Nscf)=0d0
+    ddns(1:Nscf)=0d0; ddns_abs_1e(1:Nscf)=0d0
     
     if(iflag_gs_init_wf==0) then  !case that initial guess is generated with random number
       call init_wf
@@ -42,20 +51,40 @@ contains
 
       call Hartree
     
-    else if(iflag_gs_init_wf==1) then  !case that initial guess is already read from files
+    else if(iflag_gs_init_wf==1) then  !case that initial guess has been already read from files
       rho_in(1:NL,1)=rho(1:NL)
+
+    else if(iflag_gs_init_wf==2) then  !case of option that initial guess is read from files
+      call read_write_gs_wfn_k(iflag_read)
+      rho_in(1:NL,1)=rho(1:NL)
+
     endif
 
-    functional_t = functional
-    if(functional_t == 'TBmBJ' .or. functional_t == 'BJ_PW') functional = 'PZM'
+
+    ! NOTE:
+    !  In the former-loop of the SCF calculation (iter < 20), the LDA(PZM)
+    !  is used in stead of MetaGGA(TBmBJ), due to the unstability of MGGA.
+    !  At iter<20, the functional is overrided here.
+    select case(functional)
+    case('TBmBJ', 'BJ_PW', 'tbmbj', 'bj_pw')
+      flag_functional_override = .true.
+      call finalize_xc(xc_func)
+      call init_xc(xc_func, 0, cval, xcname="PZM")
+    case default
+      flag_functional_override = .false.
+    end select
+    ! functional_t = functional
+    ! if(functional_t == 'TBmBJ' .or. functional_t == 'BJ_PW') functional = 'PZM'
     call Exc_Cor(calc_mode_gs,NBoccmax,zu_t)
-    if(functional_t == 'TBmBJ') functional = 'TBmBJ'
-    if(functional_t == 'BJ_PW') functional = 'BJ_PW'
+    ! if(functional_t == 'TBmBJ') functional = 'TBmBJ'
+    ! if(functional_t == 'BJ_PW') functional = 'BJ_PW'
+
 
     Vloc(1:NL)=Vh(1:NL)+Vpsl(1:NL)+Vexc(1:NL)
     call Total_Energy_omp(rion_update_on,calc_mode_gs)
     call Ion_Force_omp(rion_update_on,calc_mode_gs)
     Eall_GS(0)=Eall
+    fave=sqrt(sum(force(1,:)**2+force(2,:)**2+force(3,:)**2)/dble(NI))
 
     if(PrLv_scf==3 .and. comm_is_root(nproc_id_global)) then
        write(*,*) 'This is the end of preparation for ground state calculation'
@@ -65,8 +94,12 @@ contains
 
     call reset_gs_timer
     call timer_begin(LOG_GROUND_STATE)
+
+    !(Main GS itaration loop)
+    Nscf_conv=0
     do iter=1,Nscf
        if(PrLv_scf==3 .and. comm_is_root(nproc_id_global)) write(*,*)'iter = ',iter
+
        if( kbTev < 0d0 )then ! sato
           if (FSset_option == 'Y') then
              if (iter/NFSset_every*NFSset_every == iter .and. iter >= NFSset_start) then
@@ -92,13 +125,14 @@ contains
           if((comm_is_root(nproc_id_global)).and.(iter == Nscf))then
              open(126,file='occ.out')
              do ik=1,NK
-                do ib=1,NB
-                   write(126,'(2I7,e26.16E3)')ik,ib,occ(ib,ik)
-                end do
+             do ib=1,NB
+                write(126,'(2I7,e26.16E3)')ik,ib,occ(ib,ik)
+             end do
              end do
              close(126)
           end if
        end if
+
        call Gram_Schmidt
        call diag_omp
        call Gram_Schmidt
@@ -106,35 +140,50 @@ contains
        call Gram_Schmidt
        
        call psi_rho_GS
-       call Density_Update(iter) 
+       call broyden(rho,rho_in,rho_out,nl,iter,iter,nscf)
        call Hartree
 
-       functional_t = functional
-       if(functional_t == 'TBmBJ' .and. iter < 20) functional = 'PZM'
-       if(functional_t == 'BJ_PW' .and. iter < 20) functional = 'PZM'
-       call Exc_Cor(calc_mode_gs,NBoccmax,zu_t)
-       if(functional_t == 'TBmBJ' .and. iter < 20) functional = 'TBmBJ'
-       if(functional_t == 'BJ_PW' .and. iter < 20) functional = 'BJ_PW'
 
+       ! NOTE:
+       !  In the former-loop of the SCF calculation (iter < 20), the LDA(PZM)
+       !  is used in stead of MetaGGA(TBmBJ), due to the unstability of MGGA.
+       !  At iter=>20, the original functional setting is wrote backed in
+       !  
+       if (flag_functional_override .and. (iter == 20)) then
+         call finalize_xc(xc_func)
+         call init_xc(xc_func, 0, cval, xcname=xc, xname=xname, cname=cname)
+       end if
+       ! functional_t = functional
+       ! if(functional_t == 'TBmBJ' .and. iter < 20) functional = 'PZM'
+       ! if(functional_t == 'BJ_PW' .and. iter < 20) functional = 'PZM'
+       call Exc_Cor(calc_mode_gs,NBoccmax,zu_t)
+       ! if(functional_t == 'TBmBJ' .and. iter < 20) functional = 'TBmBJ'
+       ! if(functional_t == 'BJ_PW' .and. iter < 20) functional = 'BJ_PW'
+       
        Vloc(1:NL)=Vh(1:NL)+Vpsl(1:NL)+Vexc(1:NL)
+       fave_prev=fave
        call Total_Energy_omp(rion_update_off,calc_mode_gs)
        call Ion_Force_omp(rion_update_off,calc_mode_gs)
        call sp_energy_omp
        call current_GS
        Eall_GS(iter)=Eall
-       esp_var_ave(iter)=sum(esp_var(:,:))/(NK*Nelec/2)
-       esp_var_max(iter)=maxval(esp_var(:,:))
-       dns_diff(iter)=sqrt(sum((rho_out(:,iter)-rho_in(:,iter))**2))*Hxyz
+       esp_var_ave(iter) = sum(esp_var(:,:))/(NK*Nelec/2)
+       esp_var_max(iter) = maxval(esp_var(:,:))
+       ddns(iter)        = sqrt(sum((rho_out(:,iter)-rho_in(:,iter))**2))*Hxyz
+       ddns_abs_1e(iter) = sum(abs(rho_out(:,iter)-rho_in(:,iter)))*Hxyz/Nelec
+       fave=sqrt(sum(force(1,:)**2+force(2,:)**2+force(3,:)**2)/dble(NI))
 
        if (PrLv_scf==3 .and. comm_is_root(nproc_id_global)) then
           write(*,*) 'Total Energy = ',Eall_GS(iter),Eall_GS(iter)-Eall_GS(iter-1)
-          write(*,'(a28,3e15.6)') 'jav(1),jav(2),jav(3)= ',jav(1),jav(2),jav(3)
+          write(*,'(a,3e15.6)') 'jav(1),jav(2),jav(3)= ',jav(1),jav(2),jav(3)
+          write(*,*) '(orbital eigen energies of 1th k-point)'
           write(*,'(4(i3,f12.6,2x))') (ib,esp(ib,1),ib=1,NB)
+          write(*,*) '(forces on atoms)'
           do ia=1,NI
              write(*,'(1x,i7,3f15.6)') ia,force(1,ia),force(2,ia),force(3,ia)
           end do
-          write(*,*) 'var_ave,var_max=',esp_var_ave(iter),esp_var_max(iter)
-          write(*,*) 'dns. difference =',dns_diff(iter)
+          write(*,*) 'e_var_ave,e_var_max=',esp_var_ave(iter),esp_var_max(iter)
+          write(*,*) 'diff-dns,ddns/nelec=',ddns(iter),ddns_abs_1e(iter)
           if (iter/20*20 == iter) then
              write(*,*) '====='
              call timer_show_current_min('elapse time=',LOG_ALL)
@@ -142,22 +191,74 @@ contains
           write(*,*) '-----------------------------------------------'
        end if
 
+       !Convergence judge for general GS calculation
+       if(convergence=='rho_dne' .and. ddns_abs_1e(iter) < threshold) then
+         if(comm_is_root(nproc_id_global)) then
+            if(use_geometry_opt=='y' .or. use_adiabatic_md=='y')then
+              write(*,100)iter,Eall_GS(iter),abs(Eall_GS(iter)-Eall_GS(iter-1))
+            else
+              write(*,'(a,i4,/)')" GS converged at",iter
+            endif
+         endif
+
+         Nscf_conv = iter
+         exit
+       endif
+100    format("   (GS converged at",i4," : Eall=",e18.10," : dEall=",e12.4," )")
+       !(following convergence keyword are not supprted yet)
+       !if(convergence=='rho_dng' .and. XXXX < threshold) then
+       !  if(comm_is_root(nproc_id_global)) write(*,'(a,i4,/)')" GS converged at",iter
+       !  Nscf_conv = iter
+       !  exit
+       !endif
+       !if(convergence=='rho'     .and. XXXX < threshold) then
+       !  if(comm_is_root(nproc_id_global)) write(*,'(a,i4,/)')" GS converged at",iter
+       !  Nscf_conv = iter
+       !  exit
+       !endif
+       !if(convergence=='pot_dng' .and. XXXX < threshold_pot) then
+       !  if(comm_is_root(nproc_id_global)) write(*,'(a,i4,/)')" GS converged at",iter
+       !  Nscf_conv = iter
+       !  exit
+       !endif
+       !if(convergence=='pot'     .and. XXXX < threshold_pot) then
+       !  if(comm_is_root(nproc_id_global)) write(*,'(a,i4,/)')" GS converged at",iter
+       !  Nscf_conv = iter
+       !  exit
+       !endif
+
+       !Convergence judge by Energy or Force (geometry optimization or projection)
        !(exit if energy difference is below threshold: only if set convrg_scf_Eall>0)
-       if( abs(Eall_GS(iter)-Eall_GS(iter-1)) .le. convrg_scf_ene ) then
-          if(kbTev >= 0d0) then
+       if(flag_scf_conv_ene_force)then  !(for opt and projection option)
+          if( (abs(Eall_GS(iter)-Eall_GS(iter-1)) .le. convrg_scf_ene  ).or.&
+          &   (abs(fave-fave_prev)                .le. convrg_scf_force))then
+             if(kbTev >= 0d0) then
+                if(comm_is_root(nproc_id_global)) &
+                & write(*,*) "sorry, occ.out was not generated" !(fix if need)
+             endif
              if(comm_is_root(nproc_id_global)) &
-             & write(*,*) "sorry, occ.out was not generated" !(fix if need)
+             &   write(*,100)iter,Eall_GS(iter),abs(Eall_GS(iter)-Eall_GS(iter-1))
+             Nscf_conv = iter
+             exit
           endif
-          !if(PrLv_scf==3 .and. comm_is_root(nproc_id_global)) then
+       endif
+
+       if( iter==Nscf  .and. Nscf_conv==0) then
           if(comm_is_root(nproc_id_global)) then
-             write(*,'(a,i4,a,e18.10)') " GS converged at",iter," : dEall_GS=", &
-                                      & abs(Eall_GS(iter)-Eall_GS(iter-1))
+          if(use_geometry_opt=='y' .or. use_adiabatic_md=='y')then
+             write(*,120) iter,Eall_GS(iter),abs(Eall_GS(iter)-Eall_GS(iter-1))
+120    format("   (GS did not converge at",i4," : Eall=",e18.10," : dEall=",e12.4," )")
+          else
+             write(*,'(a,/)')" GS did not converge"
           endif
-          exit
+          endif
        endif
 
     end do
+    if(Nscf_conv==0) Nscf_conv=Nscf
     call timer_end(LOG_GROUND_STATE)
+
+    if(flag_update_only_zu_GS) goto 10
 
     if(PrLv_scf==3 .and. comm_is_root(nproc_id_global)) then
        call timer_show_hour('Ground State time  :', LOG_GROUND_STATE)
@@ -186,7 +287,11 @@ contains
     zu_t(:,:,:)=zu_GS(:,1:NBoccmax,:)
     Rion_eq=Rion
     dRion(:,:,-1)=0.d0; dRion(:,:,0)=0.d0
-    
+    if (use_ms_maxwell == 'y') then
+        Rion_eq_m(:,:,:) = Rion_m(:,:,:)
+    endif
+
+
     call psi_rho_GS
     call Hartree
     call Exc_Cor(calc_mode_gs,NBoccmax,zu_t)
@@ -228,8 +333,8 @@ contains
     call write_GS_data
     endif
     
-    deallocate(rho_in,rho_out)
-    deallocate(Eall_GS,esp_var_ave,esp_var_max,dns_diff)
+10  deallocate(rho_in,rho_out)
+    deallocate(Eall_GS,esp_var_ave,esp_var_max,ddns,ddns_abs_1e)
 
   contains
     subroutine reset_gs_timer

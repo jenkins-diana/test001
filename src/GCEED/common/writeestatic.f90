@@ -79,15 +79,15 @@ subroutine writeestatic
  
     call comm_summation(matbox_l,matbox_l2,lg_num(1)*lg_num(2)*lg_num(3),nproc_group_global)
   
-    write(filenum, '(i8)') itt
+    write(filenum, '(i6.6)') itt
     if(jj==1)then
-      suffix = "Exsta"//adjustl(filenum)
+      suffix = "Exsta_"//adjustl(filenum)
       phys_quantity = "exsta"
     else if(jj==2)then
-      suffix = "Eysta"//adjustl(filenum)
+      suffix = "Eysta_"//adjustl(filenum)
       phys_quantity = "eysta"
     else if(jj==3)then
-      suffix = "Ezsta"//adjustl(filenum)
+      suffix = "Ezsta_"//adjustl(filenum)
       phys_quantity = "ezsta"
     end if
 
@@ -96,6 +96,8 @@ subroutine writeestatic
       call writeavs(103,suffix,header_unit,matbox_l2)
     else if(format3d=='cube')then
       call writecube(103,suffix,phys_quantity,matbox_l2)
+    else if(format3d=='vtk')then
+      call writevtk(103,suffix,matbox_l2)
     end if
 
   end do  

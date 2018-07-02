@@ -36,9 +36,9 @@ module salmon_communication
   public :: comm_wait_all
 
   ! p2p persistent communication
-  !public :: comm_send_init
-  !public :: comm_recv_init
-  !public :: comm_start_all
+  public :: comm_send_init
+  public :: comm_recv_init
+  public :: comm_start_all
 
   ! collective communication
   public :: comm_sync_all
@@ -104,6 +104,26 @@ module salmon_communication
     module procedure comm_irecv_array5d_dcomplex
   end interface
 
+  interface comm_send_init
+    ! 3-D array
+    module procedure comm_send_init_array3d_double
+    module procedure comm_send_init_array3d_dcomplex
+
+    ! 5-D array
+    module procedure comm_send_init_array5d_double
+    module procedure comm_send_init_array5d_dcomplex
+  end interface
+
+  interface comm_recv_init
+    ! 3-D array
+    module procedure comm_recv_init_array3d_double
+    module procedure comm_recv_init_array3d_dcomplex
+
+    ! 5-D array
+    module procedure comm_recv_init_array5d_double
+    module procedure comm_recv_init_array5d_dcomplex
+  end interface
+
   interface comm_summation
     ! scalar
     module procedure comm_summation_integer
@@ -128,6 +148,10 @@ module salmon_communication
     ! 4-D array
     module procedure comm_summation_array4d_double
     module procedure comm_summation_array4d_dcomplex
+
+    ! 5-D array
+    module procedure comm_summation_array5d_double
+    module procedure comm_summation_array5d_dcomplex
   end interface
 
   interface comm_bcast
@@ -149,6 +173,11 @@ module salmon_communication
     ! 3-D array
     module procedure comm_bcast_array3d_double
     module procedure comm_bcast_array3d_dcomplex
+  
+    ! 4-D array
+    module procedure comm_bcast_array4d_double
+    ! module procedure comm_bcast_array3d_dcomplex
+    !! TODO: create broadcast routine for rank-4 tensor later ...
   end interface
 
   interface comm_allgatherv
@@ -428,6 +457,85 @@ contains
     MPI_ERROR_CHECK(call MPI_Waitall(size(reqs), reqs, MPI_STATUSES_IGNORE, ierr))
   end subroutine
 
+  function comm_send_init_array3d_double(invalue, ndest, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_PRECISION
+    implicit none
+    real(8), intent(in) :: invalue(:,:,:)
+    integer, intent(in) :: ndest, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Send_init(invalue, size(invalue), MPI_DOUBLE_PRECISION, ndest, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_send_init_array3d_dcomplex(invalue, ndest, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_COMPLEX
+    implicit none
+    complex(8), intent(in) :: invalue(:,:,:)
+    integer, intent(in)    :: ndest, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Send_init(invalue, size(invalue), MPI_DOUBLE_COMPLEX, ndest, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_send_init_array5d_double(invalue, ndest, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_PRECISION
+    implicit none
+    real(8), intent(in) :: invalue(:,:,:,:,:)
+    integer, intent(in) :: ndest, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Send_init(invalue, size(invalue), MPI_DOUBLE_PRECISION, ndest, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_send_init_array5d_dcomplex(invalue, ndest, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_COMPLEX
+    implicit none
+    complex(8), intent(in) :: invalue(:,:,:,:,:)
+    integer, intent(in)    :: ndest, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Send_init(invalue, size(invalue), MPI_DOUBLE_COMPLEX, ndest, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_recv_init_array3d_double(outvalue, nsrc, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_PRECISION
+    implicit none
+    real(8), intent(out) :: outvalue(:,:,:)
+    integer, intent(in)  :: nsrc, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Recv_init(outvalue, size(outvalue), MPI_DOUBLE_PRECISION, nsrc, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_recv_init_array3d_dcomplex(outvalue, nsrc, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_COMPLEX
+    implicit none
+    complex(8), intent(out) :: outvalue(:,:,:)
+    integer, intent(in)     :: nsrc, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Recv_init(outvalue, size(outvalue), MPI_DOUBLE_COMPLEX, nsrc, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_recv_init_array5d_double(outvalue, nsrc, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_PRECISION
+    implicit none
+    real(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)  :: nsrc, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Recv_init(outvalue, size(outvalue), MPI_DOUBLE_PRECISION, nsrc, ntag, ngroup, req, ierr))
+  end function
+
+  function comm_recv_init_array5d_dcomplex(outvalue, nsrc, ntag, ngroup) result(req)
+    use mpi, only: MPI_DOUBLE_COMPLEX
+    implicit none
+    complex(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)     :: nsrc, ntag, ngroup
+    integer :: ierr, req
+    MPI_ERROR_CHECK(call MPI_Recv_init(outvalue, size(outvalue), MPI_DOUBLE_COMPLEX, nsrc, ntag, ngroup, req, ierr))
+  end function
+
+  subroutine comm_start_all(reqs)
+    implicit none
+    integer, intent(in) :: reqs(:)
+    integer :: ierr
+    MPI_ERROR_CHECK(call MPI_Startall(size(reqs), reqs, ierr))
+  end subroutine
+
 
   subroutine comm_summation_integer(invalue, outvalue, ngroup, dest)
     use mpi, only: MPI_INTEGER, MPI_SUM
@@ -639,6 +747,36 @@ contains
     end if
   end subroutine
 
+  subroutine comm_summation_array5d_double(invalue, outvalue, N, ngroup, dest)
+    use mpi, only: MPI_DOUBLE_PRECISION, MPI_SUM
+    implicit none
+    real(8), intent(in)  :: invalue(:,:,:,:,:)
+    real(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)  :: N, ngroup
+    integer, optional, intent(in) :: dest
+    integer :: ierr
+    if (present(dest)) then
+      MPI_ERROR_CHECK(call MPI_Reduce(invalue, outvalue, N, MPI_DOUBLE_PRECISION, MPI_SUM, dest, ngroup, ierr))
+    else
+      MPI_ERROR_CHECK(call MPI_Allreduce(invalue, outvalue, N, MPI_DOUBLE_PRECISION, MPI_SUM, ngroup, ierr))
+    end if
+  end subroutine
+
+  subroutine comm_summation_array5d_dcomplex(invalue, outvalue, N, ngroup, dest)
+    use mpi, only: MPI_DOUBLE_COMPLEX, MPI_SUM
+    implicit none
+    complex(8), intent(in)  :: invalue(:,:,:,:,:)
+    complex(8), intent(out) :: outvalue(:,:,:,:,:)
+    integer, intent(in)     :: N, ngroup
+    integer, optional, intent(in) :: dest
+    integer :: ierr
+    if (present(dest)) then
+      MPI_ERROR_CHECK(call MPI_Reduce(invalue, outvalue, N, MPI_DOUBLE_COMPLEX, MPI_SUM, dest, ngroup, ierr))
+    else
+      MPI_ERROR_CHECK(call MPI_Allreduce(invalue, outvalue, N, MPI_DOUBLE_COMPLEX, MPI_SUM, ngroup, ierr))
+    end if
+  end subroutine
+
 
   subroutine comm_bcast_integer(val, ngroup, root)
     use mpi, only: MPI_INTEGER
@@ -764,6 +902,21 @@ contains
     use mpi, only: MPI_DOUBLE_PRECISION
     implicit none
     real(8), intent(inout)        :: val(:,:,:)
+    integer, intent(in)           :: ngroup
+    integer, intent(in), optional :: root
+    integer :: rank, ierr
+    if (present(root)) then
+      rank = root
+    else
+      rank = 0
+    end if
+    MPI_ERROR_CHECK(call MPI_Bcast(val, size(val), MPI_DOUBLE_PRECISION, rank, ngroup, ierr))
+  end subroutine
+  
+  subroutine comm_bcast_array4d_double(val, ngroup, root)
+    use mpi, only: MPI_DOUBLE_PRECISION
+    implicit none
+    real(8), intent(inout)        :: val(:,:,:,:)
     integer, intent(in)           :: ngroup
     integer, intent(in), optional :: root
     integer :: rank, ierr

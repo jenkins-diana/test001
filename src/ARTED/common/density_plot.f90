@@ -13,9 +13,72 @@
 !  See the License for the specific language governing permissions and
 !  limitations under the License.
 !
+subroutine write_density(it,action)
+  use salmon_global, only: format3d
+  use Global_Variables
+  use salmon_file, only: open_filehandle
+  use salmon_parallel, only: nproc_id_global
+  use salmon_communication, only: comm_is_root
+  implicit none
+  integer :: it
+  integer :: fh
+  character(2) :: action
+
+  if(action=='gs') then
+     if (comm_is_root(nproc_id_global)) then
+     select case(format3d)
+     case ('cube')
+        write(file_dns_gs,'(2A,"_dns_gs.cube")') trim(directory),trim(SYSname)
+        fh = open_filehandle(file_dns_gs)
+        call write_density_cube(fh, .false.)
+        close(fh)
+     case ('vtk')
+        write(file_dns_gs,'(2A,"_dns_gs.vtk")') trim(directory),trim(SYSname)
+        fh = open_filehandle(file_dns_gs)
+        call write_density_vtk(fh, .false.)
+        close(fh)
+     end select
+     end if
+  endif
+
+
+  if(action=='rt') then
+     if(use_ehrenfest_md=='y') &
+     &   call analysis_RT_using_GS(Rion_update_rt,Nscf,zu_t,it,"get_dns_gs")
+
+     if (comm_is_root(nproc_id_global)) then
+     select case(format3d)
+     case ('cube')
+        write(file_dns_rt,200) trim(directory),trim(SYSname),"_dns_rt_", it,".cube"
+        write(file_dns_dlt,200)trim(directory),trim(SYSname),"_dns_dlt_",it,".cube"
+        fh = open_filehandle(file_dns_rt)
+        call write_density_cube(fh, .false.)
+        close(fh)
+        if(use_adiabatic_md=='y') return
+        fh = open_filehandle(file_dns_dlt)
+        call write_density_cube(fh, .true.)
+        close(fh)
+     case ('vtk')          
+        write(file_dns_rt,200) trim(directory),trim(SYSname),"_dns_rt_", it,".vtk"
+        write(file_dns_dlt,200)trim(directory),trim(SYSname),"_dns_dlt_",it,".vtk"
+        fh = open_filehandle(file_dns_rt)
+        call write_density_vtk(fh, .false.)
+        close(fh)
+        if(use_adiabatic_md=='y') return
+        fh = open_filehandle(file_dns_dlt)
+        call write_density_vtk(fh, .true.)
+        close(fh)
+     end select
+     end if
+200  format(3A,I6.6,A)
+  endif
+
+
+
+end subroutine write_density
 
 subroutine write_density_cube(fh, write_difference)
-  use Global_Variables, only: NLx, NLy, NLz, aLx, aLy, aLz, NI, Kion, Rion, Zatom, Lxyz, Rho, Rho_gs 
+  use Global_Variables, only: NLx,NLy,NLz,Hx,Hy,Hz,NI,Kion,Rion,Zatom,Lxyz,rho,rho_gs,rho_gs_t,use_ehrenfest_md
   implicit none
   integer, intent(in) :: fh
   logical, intent(in) :: write_difference
@@ -26,39 +89,45 @@ subroutine write_density_cube(fh, write_difference)
   write(fh, '(A)') "# SALMON"
   write(fh, '(A)') "# COMMENT"
   write(fh, '(I5,3(F12.6))') NI, 0.00, 0.00, 0.00
-  write(fh, '(I5,3(F12.6))') NLx, aLx, 0.00, 0.00
-  write(fh, '(I5,3(F12.6))') NLy, 0.00, aLy, 0.00
-  write(fh, '(I5,3(F12.6))') NLz, 0.00, 0.00, aLz
+  write(fh, '(I5,3(F12.6))') NLx, Hx, 0.00, 0.00
+  write(fh, '(I5,3(F12.6))') NLy, 0.00, Hy, 0.00
+  write(fh, '(I5,3(F12.6))') NLz, 0.00, 0.00, Hz
   
   do i=1, NI
     write(fh, '(I5,4(F12.6))') Zatom(Kion(i)), 0.00, Rion(1,i), Rion(2,i), Rion(3,i) 
   end do
   
   ! Gaussian .cube file (x-slowest index, z-fastest index)
-  i = 1
+  i=1
   do ix=0, NLx-1
-    do iy=0, NLy-1
-      do iz=0, NLz-1
-        if (write_difference) then
-          r = Rho(Lxyz(ix, iy, iz)) - Rho_gs(Lxyz(ix, iy, iz))
+  do iy=0, NLy-1
+  do iz=0, NLz-1
+     if (write_difference) then
+        if(use_ehrenfest_md=='y') then
+           r = rho(Lxyz(ix,iy,iz)) - rho_gs_t(Lxyz(ix,iy,iz))
         else
-          r = Rho(Lxyz(ix, iy, iz))
-        end if
-        if (mod(i, 6) == 0) then
-          write(fh, '(ES12.4)') r
-        else
-          write(fh, '(ES12.4)', advance='no') r
+           r = rho(Lxyz(ix,iy,iz)) - rho_gs(Lxyz(ix,iy,iz))
         endif
-        i = i + 1
-      end do
-    end do
+     else
+        r = rho(Lxyz(ix,iy,iz))
+     end if
+     if(mod(i,6)==0) then
+        write(fh,10) r
+     else
+        write(fh,10,advance='no') r
+     endif
+     i=i+1
   end do
+  end do
+  end do
+
+10 format(ES12.4)
+  return
 end subroutine write_density_cube
 
 
-
 subroutine write_density_vtk(fh, write_difference)
-  use Global_Variables, only: NLx, NLy, NLz, Hx, Hy, Hz, Lxyz, Rho, Rho_gs 
+  use Global_Variables, only: NLx, NLy, NLz, Hx, Hy, Hz, Lxyz, rho, rho_gs 
   implicit none
   integer, intent(in) :: fh
   logical, intent(in) :: write_difference
@@ -77,16 +146,17 @@ subroutine write_density_vtk(fh, write_difference)
   
   ! VTK file (x-fastest index, z-slowest index)
   do iz=0, NLz-1
-    do iy=0, NLy-1
-      do ix=0, NLx-1
-        if (write_difference) then
-          write(fh, '(ES12.5)') Rho(Lxyz(ix, iy, iz)) - Rho_gs(Lxyz(ix, iy, iz))
-        else
-          write(fh, '(ES12.5)') Rho(Lxyz(ix, iy, iz))
-        end if
-      end do
-    end do
+  do iy=0, NLy-1
+  do ix=0, NLx-1
+     if (write_difference) then
+        write(fh,10) rho(Lxyz(ix,iy,iz)) - rho_gs(Lxyz(ix,iy,iz))
+     else
+        write(fh,10) rho(Lxyz(ix,iy,iz))
+     end if
   end do
+  end do
+  end do
+10 format(ES12.5)
   return
 end subroutine write_density_vtk
   
@@ -99,10 +169,3 @@ end subroutine write_density_vtk
 !  
 !  !todo: please create exporter for "avs express"
 !end subroutine write_density_avs
-
-
-
-
-  
-  
-  

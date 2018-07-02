@@ -17,6 +17,7 @@
 !This file contains mainroutine program
 !--------10--------20--------30--------40--------50--------60--------70--------80--------90--------100-------110-------120-------130
 
+
 Subroutine err_finalize(err_message)
   use Global_Variables
   use salmon_parallel, only: nproc_id_global, end_parallel
@@ -33,15 +34,17 @@ End Subroutine Err_finalize
 
 
 subroutine arted
-  use salmon_global, only: use_ms_maxwell,use_geometry_opt,restart_option
-  use control_sc,    only: tddft_sc,calc_opt_ground_state
-  use control_ms,    only: tddft_maxwell_ms
-
+  use salmon_global,   only: use_ms_maxwell,use_geometry_opt,restart_option
+  use control_sc,      only: tddft_sc
+  use control_ms,      only: tddft_maxwell_ms
+  use optimization,    only: calc_opt_ground_state
+  use md_ground_state, only: calc_md_ground_state
 
   use salmon_parallel
   use initialization
   use ground_state
   use io_gs_wfn_k
+  use io_rt_wfn_k
   
   implicit none
 
@@ -55,13 +58,22 @@ subroutine arted
     select case(iflag_calc_mode)
     case(iflag_calc_mode_gs_rt)
       call calc_ground_state
+      if(write_gs_wfn_k=='y') call read_write_gs_wfn_k(iflag_write)
     case(iflag_calc_mode_gs)
       call calc_ground_state
       call read_write_gs_wfn_k(iflag_write)
-      if(use_geometry_opt == 'y') call calc_opt_ground_state
+      if(use_geometry_opt=='y') call calc_opt_ground_state
+      if(use_adiabatic_md=='y') call calc_md_ground_state
       return
     case(iflag_calc_mode_rt)
-      call read_write_gs_wfn_k(iflag_read)
+      if(     use_ms_maxwell=='y' .and. read_gs_wfn_k_ms=='y' ) then
+         call read_gs_wfn_k_ms_each_macro_grid
+      else if(use_ms_maxwell=='y' .and. read_rt_wfn_k_ms=='y') then
+         call read_write_rt_wfn_k_ms_each_macro_grid(iflag_read_rt)
+      else
+         call read_write_gs_wfn_k(iflag_read)
+         if(read_rt_wfn_k=='y') call read_write_rt_wfn_k(iflag_read_rt)
+      endif
     end select
   else if(restart_option == 'restart')then
   else
@@ -71,8 +83,10 @@ subroutine arted
   select case(use_ms_maxwell)
   case ('y')
     call tddft_maxwell_ms
+    if(write_rt_wfn_k_ms=='y') call read_write_rt_wfn_k_ms_each_macro_grid(iflag_write_rt)
   case ('n')
     call tddft_sc
+    if(write_rt_wfn_k=='y') call read_write_rt_wfn_k(iflag_write_rt)
   case default
     call Err_finalize("Invalid use_ms_maxwell parameter!")
   end select
