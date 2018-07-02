@@ -14,6 +14,7 @@ set(SOURCES_COMPILER_VEC
 set(SOURCES_ACC
     F90/acc/current.f90
     F90/acc/hpsi.f90
+    F90/acc/total_energy.f90
     )
 
 
@@ -22,7 +23,7 @@ set(SOURCE_HPSI_EXPLICIT_VEC   C/${SIMD_SET}/hpsi.c)
 set(SOURCE_HPSI_COMPILER_VEC   F90/hpsi.f90)
 set(SOURCE_HPSI_ORIGINAL       F90/hpsi_original.f90)
 
-if (ENABLE_EXPLICIT_VEC)
+if (EXPLICIT_VEC)
   set(SOURCE_HPSI ${SOURCE_HPSI_EXPLICIT_VEC})
 else ()
   set(SOURCE_HPSI ${SOURCE_HPSI_COMPILER_VEC})
@@ -35,7 +36,7 @@ endif ()
 
 
 ###
-if (ENABLE_EXPLICIT_VEC)
+if (EXPLICIT_VEC)
   set(SOURCES_OMP ${SOURCE_HPSI} ${SOURCES_EXPLICIT_VEC})
 else ()
   set(SOURCES_OMP ${SOURCE_HPSI} ${SOURCES_COMPILER_VEC})

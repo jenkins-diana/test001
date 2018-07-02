@@ -1,0 +1,18 @@
+# intel without mpi environment
+
+TARGET = salmon.cpu
+FC = ifort
+CC = icc
+FFLAGS = -O3 -qopenmp -ansi-alias -fno-alias -fpp -nogen-interface -std03 -warn all
+CFLAGS = -O3 -qopenmp -ansi-alias -fno-alias -Wall -restrict
+FILE_MATHLIB = lapack
+LIBLAPACK = -mkl=sequential
+LIBSCALAPACK = -mkl=sequential
+MODULE_SWITCH = -module
+COMM_SET = dummy
+
+ifneq (,$(wildcard make.body))
+include make.body
+else 
+include gnu_makefiles/make.body
+endif

@@ -35,6 +35,8 @@ complex(8),allocatable :: cmatbox2_x_s(:,:,:),cmatbox2_y_s(:,:,:),cmatbox2_z_s(:
 
 real(8),allocatable :: rmatbox1_x_h(:,:,:),rmatbox1_y_h(:,:,:),rmatbox1_z_h(:,:,:)
 real(8),allocatable :: rmatbox2_x_h(:,:,:),rmatbox2_y_h(:,:,:),rmatbox2_z_h(:,:,:)
+real(8),allocatable :: rmatbox3_x_h(:,:,:),rmatbox3_y_h(:,:,:),rmatbox3_z_h(:,:,:)
+real(8),allocatable :: rmatbox4_x_h(:,:,:),rmatbox4_y_h(:,:,:),rmatbox4_z_h(:,:,:)
 
 complex(8),allocatable :: cmatbox1_x_h(:,:,:),cmatbox1_y_h(:,:,:),cmatbox1_z_h(:,:,:)
 complex(8),allocatable :: cmatbox2_x_h(:,:,:),cmatbox2_y_h(:,:,:),cmatbox2_z_h(:,:,:)
@@ -45,30 +47,66 @@ CONTAINS
 !=======================================================================
 
 SUBROUTINE init_updown
+use inputoutput, only: iperiodic
 use salmon_parallel
 use salmon_communication, only: comm_proc_null
 use new_world_sub
 
 implicit none
 
-iup_array(1)=nproc_id_orbital+1
-idw_array(1)=nproc_id_orbital-1
-if(imr(1)==nproc_Mxin(1)-1) iup_array(1)=comm_proc_null
-if(imr(1)==0) idw_array(1)=comm_proc_null
+iup_array(1)=nproc_id_korbital+1
+idw_array(1)=nproc_id_korbital-1
+select case(iperiodic)
+case(0)
+  if(imr(1)==nproc_Mxin(1)-1) iup_array(1)=comm_proc_null
+  if(imr(1)==0) idw_array(1)=comm_proc_null
+case(3)
+  if(imr(1)==nproc_Mxin(1)-1) then
+    iup_array(1)=nproc_id_korbital-(nproc_Mxin(1)-1)
+  end if
+  if(imr(1)==0) then
+    idw_array(1)=nproc_id_korbital+(nproc_Mxin(1)-1)
+  end if
+end select
 
-jup_array(1)=nproc_id_orbital+nproc_Mxin(1)
-jdw_array(1)=nproc_id_orbital-nproc_Mxin(1)
-if(imr(2)==nproc_Mxin(2)-1) jup_array(1)=comm_proc_null
-if(imr(2)==0) jdw_array(1)=comm_proc_null
+jup_array(1)=nproc_id_korbital+nproc_Mxin(1)
+jdw_array(1)=nproc_id_korbital-nproc_Mxin(1)
+select case(iperiodic)
+case(0)
+  if(imr(2)==nproc_Mxin(2)-1) jup_array(1)=comm_proc_null
+  if(imr(2)==0) jdw_array(1)=comm_proc_null
+case(3)
+  if(imr(2)==nproc_Mxin(2)-1) then
+    jup_array(1)=nproc_id_korbital-(nproc_Mxin(2)-1)*nproc_Mxin(1)
+  end if
+  if(imr(2)==0) then
+    jdw_array(1)=nproc_id_korbital+(nproc_Mxin(2)-1)*nproc_Mxin(1)
+  end if
+end select
 
-kup_array(1)=nproc_id_orbital+nproc_Mxin(1)*nproc_Mxin(2)
-kdw_array(1)=nproc_id_orbital-nproc_Mxin(1)*nproc_Mxin(2)
-if(imr(3)==nproc_Mxin(3)-1) kup_array(1)=comm_proc_null
-if(imr(3)==0) kdw_array(1)=comm_proc_null
+kup_array(1)=nproc_id_korbital+nproc_Mxin(1)*nproc_Mxin(2)
+kdw_array(1)=nproc_id_korbital-nproc_Mxin(1)*nproc_Mxin(2)
+select case(iperiodic)
+case(0)
+  if(imr(3)==nproc_Mxin(3)-1) kup_array(1)=comm_proc_null
+  if(imr(3)==0) kdw_array(1)=comm_proc_null
+case(3)
+  if(imr(3)==nproc_Mxin(3)-1) then
+    kup_array(1)=nproc_id_korbital-(nproc_Mxin(3)-1)*nproc_Mxin(1)*nproc_Mxin(2)
+  end if
+  if(imr(3)==0) then
+    kdw_array(1)=nproc_id_korbital+(nproc_Mxin(3)-1)*nproc_Mxin(1)*nproc_Mxin(2)
+  end if
+end select
 
 if(isequential==1)then
   if(imr(1)==nproc_Mxin(1)-1.and.imrs(1)==nproc_Mxin_s_dm(1)-1) then
-    iup_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      iup_array(2)=comm_proc_null
+    case(3)
+      iup_array(2)=nproc_id_h+nproc_Mxin_mul_s_dm-nproc_Mxin_s_dm(1)+1-nproc_Mxin_mul_s_dm*nproc_Mxin(1)
+    end select
   else if(imrs(1)==nproc_Mxin_s_dm(1)-1) then
     iup_array(2)=nproc_id_h+nproc_Mxin_mul_s_dm-nproc_Mxin_s_dm(1)+1
   else
@@ -76,7 +114,12 @@ if(isequential==1)then
   end if
 else if(isequential==2)then
   if(imr(1)==nproc_Mxin(1)-1.and.imrs(1)==nproc_Mxin_s_dm(1)-1) then
-    iup_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      iup_array(2)=comm_proc_null
+    case(3)
+      iup_array(2)=nproc_id_h+nproc_Mxin_mul+1-nproc_Mxin_mul*nproc_Mxin_s_dm(1)-nproc_Mxin(1)
+    end select
   else if(imrs(1)==nproc_Mxin_s_dm(1)-1) then
     iup_array(2)=nproc_id_h+nproc_Mxin_mul+1-nproc_Mxin_mul*nproc_Mxin_s_dm(1)
   else
@@ -98,7 +141,12 @@ end if
 
 if(isequential==1)then
   if(imr(1)==0.and.imrs(1)==0) then
-    idw_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      idw_array(2)=comm_proc_null
+    case(3)
+      idw_array(2)=nproc_id_h-nproc_Mxin_mul-1+nproc_Mxin_mul*nproc_Mxin_s_dm(1)+nproc_Mxin(1)
+    end select
   else if(imrs(1)==0) then
     idw_array(2)=nproc_id_h-nproc_Mxin_mul_s_dm+nproc_Mxin_s_dm(1)-1
   else
@@ -128,7 +176,13 @@ end if
 
 if(isequential==1)then
   if(imr(2)==nproc_Mxin(2)-1.and.imrs(2)==nproc_Mxin_s_dm(2)-1) then
-    jup_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      jup_array(2)=comm_proc_null
+    case(3)
+      jup_array(2)=nproc_id_h+nproc_Mxin_mul_s_dm*nproc_Mxin(1)    &
+                                    -(nproc_Mxin_s_dm(2)-1)*nproc_Mxin_s_dm(1)-nproc_Mxin_mul_s_dm*nproc_Mxin(1)*nproc_Mxin(2)
+    end select 
   else if(imrs(2)==nproc_Mxin_s_dm(2)-1) then
     jup_array(2)=nproc_id_h+nproc_Mxin_mul_s_dm*nproc_Mxin(1)    &
                                     -(nproc_Mxin_s_dm(2)-1)*nproc_Mxin_s_dm(1)
@@ -137,7 +191,13 @@ if(isequential==1)then
   end if
 else if(isequential==2)then
   if(imr(2)==nproc_Mxin(2)-1.and.imrs(2)==nproc_Mxin_s_dm(2)-1) then
-    jup_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      jup_array(2)=comm_proc_null
+    case(3)
+      jup_array(2)=nproc_id_h+nproc_Mxin_mul*nproc_Mxin_s_dm(1)  &
+            +nproc_Mxin(1)-nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)-nproc_Mxin(1)*nproc_Mxin(2)
+    end select
   else if(imrs(2)==nproc_Mxin_s_dm(2)-1) then
     jup_array(2)=nproc_id_h+nproc_Mxin_mul*nproc_Mxin_s_dm(1)  &
             +nproc_Mxin(1)-nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)
@@ -163,7 +223,13 @@ end if
 
 if(isequential==1)then
   if(imr(2)==0.and.imrs(2)==0) then
-    jdw_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      jdw_array(2)=comm_proc_null
+    case(3)
+      jdw_array(2)=nproc_id_h-nproc_Mxin_mul*nproc_Mxin_s_dm(1)  &
+              -nproc_Mxin(1)+nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)+nproc_Mxin(1)*nproc_Mxin(2)
+    end select
   else if(imrs(2)==0) then
     jdw_array(2)=nproc_id_h-nproc_Mxin_mul_s_dm*nproc_Mxin(1)    &
                                     +(nproc_Mxin_s_dm(2)-1)*nproc_Mxin_s_dm(1)
@@ -199,7 +265,14 @@ end if
 
 if(isequential==1)then
   if(imr(3)==nproc_Mxin(3)-1.and.imrs(3)==nproc_Mxin_s_dm(3)-1) then
-    kup_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      kup_array(2)=comm_proc_null
+    case(3)
+      kup_array(2)=nproc_id_h+nproc_Mxin_mul_s_dm*nproc_Mxin(1)*nproc_Mxin(2) &
+                                    -(nproc_Mxin_s_dm(3)-1)*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2) &
+                                    -nproc_Mxin_mul_s_dm*nproc_Mxin_mul
+    end select
   else if(imrs(3)==nproc_Mxin_s_dm(3)-1) then
     kup_array(2)=nproc_id_h+nproc_Mxin_mul_s_dm*nproc_Mxin(1)*nproc_Mxin(2)   &
                                     -(nproc_Mxin_s_dm(3)-1)*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)
@@ -208,7 +281,14 @@ if(isequential==1)then
   end if
 else if(isequential==2)then
   if(imr(3)==nproc_Mxin(3)-1.and.imrs(3)==nproc_Mxin_s_dm(3)-1) then
-    kup_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      kup_array(2)=comm_proc_null
+    case(3)
+      kup_array(2)=nproc_id_h+nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2) &
+              +nproc_Mxin(1)*nproc_Mxin(2)   &
+              -nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)*nproc_Mxin_s_dm(3)-nproc_Mxin_mul
+    end select
   else if(imrs(3)==nproc_Mxin_s_dm(3)-1) then
     kup_array(2)=nproc_id_h+nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)  &
               +nproc_Mxin(1)*nproc_Mxin(2)   &
@@ -237,7 +317,14 @@ end if
 
 if(isequential==1)then
   if(imr(3)==0.and.imrs(3)==0) then
-    kdw_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      kdw_array(2)=comm_proc_null
+    case(3)
+      kdw_array(2)=nproc_id_h-nproc_Mxin_mul_s_dm*nproc_Mxin(1)*nproc_Mxin(2) &
+                                    +(nproc_Mxin_s_dm(3)-1)*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2) &
+                                    +nproc_Mxin_mul_s_dm*nproc_Mxin_mul
+    end select
   else if(imrs(3)==0) then
     kdw_array(2)=nproc_id_h-nproc_Mxin_mul_s_dm*nproc_Mxin(1)*nproc_Mxin(2)   &
                                     +(nproc_Mxin_s_dm(3)-1)*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)
@@ -246,7 +333,14 @@ if(isequential==1)then
   end if
 else if(isequential==2)then
   if(imr(3)==0.and.imrs(3)==0) then
-    kdw_array(2)=comm_proc_null
+    select case(iperiodic)
+    case(0)
+      kdw_array(2)=comm_proc_null
+    case(3)
+      kdw_array(2)=nproc_id_h-nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2) &
+              -nproc_Mxin(1)*nproc_Mxin(2)   &
+              +nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)*nproc_Mxin_s_dm(3)+nproc_Mxin_mul
+    end select
   else if(imrs(3)==0) then
     kdw_array(2)=nproc_id_h-nproc_Mxin_mul*nproc_Mxin_s_dm(1)*nproc_Mxin_s_dm(2)  &
               -nproc_Mxin(1)*nproc_Mxin(2)   &
@@ -446,6 +540,12 @@ allocate(rmatbox1_z_h(inum_Mxin2(1,nproc_id_global),inum_Mxin2(2,nproc_id_global
 allocate(rmatbox2_x_h(Ndh,inum_Mxin2(2,nproc_id_global),inum_Mxin2(3,nproc_id_global)))
 allocate(rmatbox2_y_h(inum_Mxin2(1,nproc_id_global),Ndh,inum_Mxin2(3,nproc_id_global)))
 allocate(rmatbox2_z_h(inum_Mxin2(1,nproc_id_global),inum_Mxin2(2,nproc_id_global),Ndh))
+allocate(rmatbox3_x_h(Ndh,inum_Mxin2(2,nproc_id_global),inum_Mxin2(3,nproc_id_global)))
+allocate(rmatbox3_y_h(inum_Mxin2(1,nproc_id_global),Ndh,inum_Mxin2(3,nproc_id_global)))
+allocate(rmatbox3_z_h(inum_Mxin2(1,nproc_id_global),inum_Mxin2(2,nproc_id_global),Ndh))
+allocate(rmatbox4_x_h(Ndh,inum_Mxin2(2,nproc_id_global),inum_Mxin2(3,nproc_id_global)))
+allocate(rmatbox4_y_h(inum_Mxin2(1,nproc_id_global),Ndh,inum_Mxin2(3,nproc_id_global)))
+allocate(rmatbox4_z_h(inum_Mxin2(1,nproc_id_global),inum_Mxin2(2,nproc_id_global),Ndh))
 
 rmatbox1_x_h=0.d0
 rmatbox1_y_h=0.d0
@@ -453,6 +553,12 @@ rmatbox1_z_h=0.d0
 rmatbox2_x_h=0.d0
 rmatbox2_y_h=0.d0
 rmatbox2_z_h=0.d0
+rmatbox3_x_h=0.d0
+rmatbox3_y_h=0.d0
+rmatbox3_z_h=0.d0
+rmatbox4_x_h=0.d0
+rmatbox4_y_h=0.d0
+rmatbox4_z_h=0.d0
 
 allocate(cmatbox1_x_h(Ndh,inum_Mxin2(2,nproc_id_global),inum_Mxin2(3,nproc_id_global)))
 allocate(cmatbox1_y_h(inum_Mxin2(1,nproc_id_global),Ndh,inum_Mxin2(3,nproc_id_global)))

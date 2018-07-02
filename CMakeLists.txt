@@ -1,5 +1,7 @@
 # recommended version : 3.0.2
 cmake_minimum_required(VERSION 2.8)
+enable_testing()
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmakefiles/Platforms)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmakefiles/Modules)
 include(${CMAKE_SOURCE_DIR}/cmakefiles/misc.cmake)
@@ -28,7 +30,6 @@ option_set(LOOP_BLOCKING           "Enable loop blocking at the stencil"        
 option_set(SW_PREFETCH             "Enable software prefetch in the explicit vec of the stencil"                       OFF)
 
 ## Debug
-option_set(USE_PAPI                "Use Performance API"                OFF)
 option_set(USE_NVTX                "Use NVIDIA Tools Extension Library" OFF)
 
 ## test: joint hpsi subroutine
@@ -37,6 +38,9 @@ set(HPSI_TEST_SUFFIX "")
 if (HPSI_TEST)
   set(HPSI_TEST_SUFFIX "_test")
 endif()
+
+## Additional library options
+option_set(USE_LIBXC                "Use LibXC library"                 OFF)
 
 # cross-compile or native-compile
 if (${CMAKE_CROSSCOMPILING})
@@ -108,12 +112,6 @@ set(EXTERNAL_LIBS          "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR})
 
-### Performance API from ICL, Univ. TENNESSEE
-if (USE_PAPI)
-  add_definitions(-DARTED_USE_PAPI)
-  set(EXTERNAL_LIBS ${EXTERNAL_LIBS} papi)
-endif ()
-
 ### NVIDIA Tools Extension Library
 if (USE_NVTX)
   find_package(CUDA REQUIRED)
@@ -134,6 +132,22 @@ endif ()
 add_definitions_if(CURRENT_PREPROCESSING -DARTED_CURRENT_PREPROCESSING)
 add_definitions_if(REDUCE_FOR_MANYCORE   -DARTED_REDUCE_FOR_MANYCORE)
 add_definitions_if(LARGE_BLOCKING        -DARTED_LBLK)
+
+### Additional Libraries:
+### LibXC 
+if (USE_LIBXC)
+  if (LIBXC_INSTALLDIR)
+    include_directories(${LIBXC_INSTALLDIR}/include)
+    link_directories(${LIBXC_INSTALLDIR}/lib)
+    set(EXTERNAL_LIBS ${EXTERNAL_LIBS} xcf90 xc)
+  else()
+    find_package(LIBXCF90 REQUIRED)
+    include_directories(${LIBXCF90_INCLUDES})
+    set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${LIBXCF90_LIBRARIES})
+  endif()
+  add_definitions(-DSALMON_USE_LIBXC)
+endif ()
+
 
 if (OPT_STENCIL)
   add_definitions(-DARTED_STENCIL_OPTIMIZED)
@@ -184,6 +198,10 @@ set(SALMON_MISC_LIB      "misc_rtl")
 
 set(SALMON_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(${SALMON_SRC_DIR})
+
+# test directory
+set(SALMON_TEST_DIR ${CMAKE_SOURCE_DIR}/testsuites)
+add_subdirectory(${SALMON_TEST_DIR})
 
 message(STATUS "Enabled macro")
 get_directory_property(MACRO_LOG COMPILE_DEFINITIONS)

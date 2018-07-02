@@ -20,7 +20,7 @@ use new_world_sub
 implicit none
 integer :: j
 
-if(nproc_ob*nproc_Mxin(1)*nproc_Mxin(2)*nproc_Mxin(3)/=nproc_size_global)then
+if(nproc_k*nproc_ob*nproc_Mxin(1)*nproc_Mxin(2)*nproc_Mxin(3)/=nproc_size_global)then
   write(*,*) "inumcpu_check error!"
   write(*,*) "number of cpu is not correct!"
   stop
@@ -53,5 +53,12 @@ if(mod(nproc_Mxin_s(3),nproc_Mxin(3))/=0)then
   stop
 end if
 nproc_Mxin_s_dm(1:3)=nproc_Mxin_s(1:3)/nproc_Mxin(1:3)
+
+if(ilsda==1)then
+  if(nproc_ob>1)then
+    write(*,*) "Orbital parallelization is not currently supported. It will be supported in future."
+    stop
+  end if
+end if
 
 end subroutine check_numcpu

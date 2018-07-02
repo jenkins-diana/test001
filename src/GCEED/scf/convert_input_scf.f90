@@ -27,13 +27,14 @@ integer :: icheck1,icheck2
 character(100) :: file_atoms_coo
 real(8) :: dip_spacing
 
+ik_oddeven=2
 iterVh = 0         ! Iteration counter
+ilsda = ispin
 
 if(comm_is_root(nproc_id_global))then
    open(fh_namelist, file='.namelist.tmp', status='old')
 end if
 !===== namelist for group_fundamental =====
-ik_oddeven=2
 
 select case(amin_routine)
   case('cg','diis','cg-diis')
@@ -56,8 +57,6 @@ iDiter(1:maxntmg)=1000
 Harray(1:3,1)=dl(1:3)
 rLsize(1:3,1)=al(1:3)
 iDiter(1) = nscf
-
-ilsda = ispin
 
 if(ispin == 0)then
   MST(1)=nstate
@@ -97,17 +96,6 @@ case('n')
   iflag_subspace_diag = 0
 end select
 
-select case(convergence)
-case('rho','rho_dng')
-  continue
-case('pot','pot_dng')
-  if(threshold_pot<-1.d-12)then
-    stop 'threthold_pot must be specified when the variable convergence is "pot" or "pot_dng".'
-  end if 
-case default
-  stop 'the variable convergence must be set to either "rho", "rho_dng", "pot", or "pot_dng"'
-end select
-
 select case(use_force)
 case('y')
   icalcforce = 1
@@ -115,8 +103,10 @@ case('n')
   icalcforce = 0
 end select
 
-allocate(wtk(1))
-wtk(:)=1.d0
+num_kpoints_3d(1:3)=num_kgrid(1:3)
+num_kpoints_rd=num_kpoints_3d(1)*num_kpoints_3d(2)*num_kpoints_3d(3)
+allocate(wtk(num_kpoints_rd))
+wtk(:)=1.d0/dble(num_kpoints_rd)
 
 if(comm_is_root(nproc_id_global))then
   if(iflag_stopt==1.and.icalcforce==0)then
@@ -138,14 +128,14 @@ else if(ilsda == 1) then
   itotfMST=ifMST(1)+ifMST(2)
 end if
 
-allocate( rocc(itotMST,1) )
+allocate( rocc(itotMST,num_kpoints_rd) )
 
 rocc(:,:)=0.d0             
 if(ilsda == 0) then
-  rocc(:ifMST(1),1) = 2.d0   ! Occupation number
+  rocc(:ifMST(1),:num_kpoints_rd) = 2.d0   ! Occupation number
 else if(ilsda == 1) then
-  rocc(:ifMST(1),1) = 1.d0   ! Occupation number
-  rocc(MST(1)+1:MST(1)+ifMST(2),1) = 1.d0   ! Occupation number
+  rocc(:ifMST(1),:num_kpoints_rd) = 1.d0   ! Occupation number
+  rocc(MST(1)+1:MST(1)+ifMST(2),:num_kpoints_rd) = 1.d0   ! Occupation number
 end if
 
 !===== namelist for group_parallel =====

@@ -30,13 +30,17 @@ Subroutine input_pseudopotential_YS
   integer :: ik,Mr,l,i
   real(8) :: rRC(0:Lmax0)
   real(8) :: r1,r2,r3,r4
-  real(8) :: vpp(0:Nrmax0,0:Lmax0),upp(0:Nrmax0,0:Lmax0)   !zero in radial index for taking derivative
-  real(8) :: dvpp(0:Nrmax0,0:Lmax0),dupp(0:Nrmax0,0:Lmax0) !zero in radial index for taking derivative
-  real(8) :: rhor_nlcc(0:Nrmax0,0:2)   !zero in radial index for taking derivative
+  real(8),allocatable :: vpp(:,:),upp(:,:)   !zero in radial index for taking derivative
+  real(8),allocatable :: dvpp(:,:),dupp(:,:) !zero in radial index for taking derivative
+  real(8),allocatable :: rhor_nlcc(:,:)   !zero in radial index for taking derivative
   character(2) :: atom_symbol
   character(256) :: ps_file
   integer :: ips_type,nlen_psf
   logical,allocatable :: flag_nlcc_element(:)
+
+  allocate(vpp(0:Nrmax0,0:Lmax0),upp(0:Nrmax0,0:Lmax0))
+  allocate(dvpp(0:Nrmax0,0:Lmax0),dupp(0:Nrmax0,0:Lmax0))
+  allocate(rhor_nlcc(0:Nrmax0,0:2))
 
 ! Nonlinear core correction
   allocate(rho_nlcc_tbl(Nrmax,NE),tau_nlcc_tbl(Nrmax,NE))
@@ -167,7 +171,7 @@ Subroutine input_pseudopotential_YS
       write(*,*) '===================pseudopotential data==================='
       write(*,*) 'ik ,atom_symbol=',ik, atom_symbol
       write(*,*) 'ps_format =',ps_format(ik)
-      write(*,*) 'ps_file =',ps_file
+      write(*,*) 'ps_file =',trim(ps_file)
 
       select case (ips_type)
       case(n_Yabana_Bertsch_psformat)
@@ -214,7 +218,7 @@ Subroutine input_pseudopotential_YS
       write(*,*) 'Zps(ik), Mlps(ik) =',Zps(ik), Mlps(ik)
       write(*,*) 'Rps(ik), NRps(ik) =',Rps(ik), NRps(ik)
       write(*,*) 'Lref(ik) =',Lref(ik)
-      write(*,*) 'anorm(ik,l) =',(anorm(l,ik),l=0,Mlps(ik))
+      write(*,*) 'anorm(ik,l) =',(real(anorm(l,ik)),l=0,Mlps(ik))
       write(*,*) 'inorm(ik,l) =',(inorm(l,ik),l=0,Mlps(ik))
       write(*,*) 'Mass(ik) =',Mass(ik)
       write(*,*) 'flag_nlcc_element(ik) =',flag_nlcc_element(ik)
@@ -541,7 +545,7 @@ Subroutine Make_mask_function(eta_mask,mask,dmask,ik)
 !local variables
   integer,parameter :: M = 200
 !  real(8),parameter :: eta = 15.d0
-  integer :: i,j
+  integer :: i,j, i3,i2,i1
   real(8) :: xp,xm,dx,nmask0,kx1,dk
   real(8) :: x(M),nmask(M),mat(M,M),k(M),nmask_k(M)
 !Lapack dsyev
@@ -610,14 +614,19 @@ Subroutine Make_mask_function(eta_mask,mask,dmask,ik)
   do i=2,NRps(ik) !Avoiding divide by zero
     do j = 1,M
       kx1 = k(j)*rad(i,ik)/Rps(ik)
-      mask(i) = mask(i) + nmask_k(j)*kx1*sin(kx1)
-      dmask(i) = dmask(i) + nmask_k(j)*(kx1**2*cos(kx1)-kx1*sin(kx1))
+      mask(i) =  mask(i) + nmask_k(j)*kx1*sin(kx1)
+      dmask(i)= dmask(i) + nmask_k(j)*(kx1**2*cos(kx1)-kx1*sin(kx1))
     end do
-    mask(i) = (2.d0/Pi)*mask(i)*dk*Rps(ik)**2/rad(i,ik)**2
-    dmask(i) = (2.d0/Pi)*dmask(i)*dk*Rps(ik)**2/rad(i,ik)**3 
+    mask(i) = (2.d0/Pi)* mask(i)*dk*Rps(ik)**2/rad(i,ik)**2
+    dmask(i)= (2.d0/Pi)*dmask(i)*dk*Rps(ik)**2/rad(i,ik)**3 
   end do
-  mask(1) = mask(2)-(mask(3)-mask(2))/(rad(3,ik)-rad(2,ik))*(rad(2,ik)-rad(1,ik))
-  dmask(1) = dmask(2)-(dmask(3)-dmask(2))/(rad(3,ik)-rad(2,ik))*(rad(2,ik)-rad(1,ik))
+  mask(1) =  mask(2)-( mask(3)- mask(2))/(rad(3,ik)-rad(2,ik))*(rad(2,ik)-rad(1,ik))
+  dmask(1)= dmask(2)-(dmask(3)-dmask(2))/(rad(3,ik)-rad(2,ik))*(rad(2,ik)-rad(1,ik))
+  i1=NRps(ik)-2
+  i2=NRps(ik)-1
+  i3=NRps(ik)
+   mask(i3)=  mask(i2)+( mask(i2)- mask(i1))/(rad(i2,ik)-rad(i1,ik))*(rad(i3,ik)-rad(i2,ik))
+  dmask(i3)= dmask(i2)+(dmask(i2)-dmask(i1))/(rad(i2,ik)-rad(i1,ik))*(rad(i3,ik)-rad(i2,ik))
 
   open(4,file="mask.dat")
   write(4,*) "# Rps(ik), NRps(ik) =",Rps(ik), NRps(ik)
@@ -901,7 +910,7 @@ Subroutine Read_PS_ABINITFHI(Lmax0,Nrmax0,Mr,rRC,upp,vpp,rhor_nlcc,flag_nlcc_ele
     step = minval(step_l(0:Mlps(ik)))
   end if
 
-  do i=Mr+1,Nrmax
+  do i=Mr+1,Nrmax-1
     rad(i+1,ik) = rad(i,ik)*step
   end do
 

@@ -9,6 +9,8 @@ set(SOURCES
     preprocessor.f90
     restart.f90
     density_plot.f90
+    projector.f90
+    Ac_alocal_laser.f90
     )
 
 if (ENABLE_OPENACC)
@@ -16,4 +18,4 @@ if (ENABLE_OPENACC)
 endif ()
 
 add_library(${ARTED_COMMON_LIB} STATIC ${SOURCES})
-add_dependencies(${ARTED_COMMON_LIB} ${SALMON_MATH_LIB} ${ARTED_MODULE_LIB})
+add_dependencies(${ARTED_COMMON_LIB} ${SALMON_MATH_LIB} ${SALMON_XC_LIB} ${ARTED_MODULE_LIB})

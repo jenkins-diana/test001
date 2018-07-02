@@ -63,14 +63,10 @@ contains
   end subroutine
 end subroutine
 
-subroutine dt_evolve_KB_MS(ixy_m)
-  use global_variables, only: propagator,kAc,kAc0,Ac_new_m,Ac_m,zu_m,NX_table,NY_table
+subroutine dt_evolve_KB_MS(imacro)
+  use global_variables, only: propagator,kAc,kAc0,Ac_new_m,ac_m,zu_m
   implicit none
-  integer, intent(in) :: ixy_m
-  integer :: ix_m, iy_m
-
-  ix_m=NX_table(ixy_m)
-  iy_m=NY_table(ixy_m)
+  integer, intent(in) :: imacro
 
   select case(propagator)
     case('middlepoint')
@@ -86,10 +82,10 @@ contains
     implicit none
     integer :: ixyz
     do ixyz=1,3
-      kAc(:,ixyz)=kAc0(:,ixyz)+(Ac_new_m(ixyz,ix_m,iy_m)+Ac_m(ixyz,ix_m,iy_m))/2d0
+      kAc(:,ixyz)=kAc0(:,ixyz)+(Ac_new_m(ixyz,imacro)+Ac_m(ixyz,imacro))/2d0
     enddo
 !$acc update device(kAc)
-    call dt_evolve_omp_KB_MS(zu_m(:,:,:,ixy_m))
+    call dt_evolve_omp_KB_MS(zu_m(:,:,:,imacro))
   end subroutine
 
   subroutine etrs_propagator
@@ -97,11 +93,11 @@ contains
     implicit none
     integer :: ixyz
     do ixyz=1,3
-      kAc(:,ixyz)=kAc0(:,ixyz)+Ac_m(ixyz,ix_m,iy_m)
-      kAc_new(:,ixyz)=kAc0(:,ixyz)+Ac_new_m(ixyz,ix_m,iy_m)
+      kAc(:,ixyz)=kAc0(:,ixyz)+Ac_m(ixyz,imacro)
+      kAc_new(:,ixyz)=kAc0(:,ixyz)+Ac_new_m(ixyz,imacro)
     enddo
 !$acc update device(kAc,kAc_new)
-    call dt_evolve_etrs_omp_KB(zu_m(:,:,:,ixy_m))
+    call dt_evolve_etrs_omp_KB(zu_m(:,:,:,imacro))
   end subroutine
 end subroutine
 
@@ -109,6 +105,7 @@ end subroutine
 
 Subroutine dt_evolve_omp_KB(zu)
   use Global_Variables
+  use projector
   use timer
 #ifdef ARTED_USE_NVTX
   use nvtx
@@ -116,48 +113,23 @@ Subroutine dt_evolve_omp_KB(zu)
   use opt_variables
   implicit none
   complex(8),intent(inout) :: zu(NL,NBoccmax,NK_s:NK_e)
-  integer    :: ik,ib
-  integer    :: ia,j,i,ix,iy,iz
-  real(8)    :: kr
-  integer    :: thr_id,omp_get_thread_num,ikb
+  integer    :: ik,ib,ikb
+  integer    :: i
 
   NVTX_BEG('dt_evolve_omp_KB()',1)
   call timer_begin(LOG_DT_EVOLVE)
 
-!$acc data pcopy(zu, vloc) pcopyout(ekr_omp)
+!$acc data pcopy(zu, vloc) pcreate(zproj)
 
 !Constructing nonlocal part
   NVTX_BEG('dt_evolve_omp_KB(): nonlocal part',2)
-#ifdef _OPENACC
-!$acc kernels pcopy(ekr_omp) pcopyin(Mps, Jxyz,Jxx,Jyy,Jzz, kAc, Lx,Ly,Lz)
-!$acc loop collapse(2) independent gang
-#else
-  thr_id=0
-!$omp parallel private(thr_id)
-!$  thr_id=omp_get_thread_num()
-!$omp do private(ik,ia,j,i,ix,iy,iz,kr) collapse(2)
-#endif
-  do ik=NK_s,NK_e
-  do ia=1,NI
-!$acc loop independent vector(128)
-  do j=1,Mps(ia)
-    i=Jxyz(j,ia); ix=Jxx(j,ia); iy=Jyy(j,ia); iz=Jzz(j,ia)
-    kr=kAc(ik,1)*(Lx(i)*Hx-ix*aLx)+kAc(ik,2)*(Ly(i)*Hy-iy*aLy)+kAc(ik,3)*(Lz(i)*Hz-iz*aLz)
-    ekr_omp(j,ia,ik)=exp(zI*kr)
-  end do
-  end do
-  end do
-#ifdef _OPENACC
-!$acc end kernels
-#else
-!$omp end parallel
-#endif
+  call update_projector(kac)
   NVTX_END()
 
 ! yabana
   select case(functional)
-  case('VS98','TPSS','TBmBJ','BJ_PW')
-!$acc update self(zu, ekr_omp, vloc)
+  case('VS98','TPSS','TBmBJ','BJ_PW','tbmbj','bj_pw')
+!$acc update self(zu, vloc)
 
 !$omp parallel do private(ik,ib)
   do ikb=1,NKB
@@ -176,8 +148,10 @@ Subroutine dt_evolve_omp_KB(zu)
   call hamiltonian(zu,.false.)
 
   call psi_rho_RT(zu)
-  call Hartree
-  call Exc_Cor(calc_mode_rt,NBoccmax,zu)
+  if(no_update_func=='n')then
+     call Hartree
+     call Exc_Cor(calc_mode_rt,NBoccmax,zu)
+  endif
 
 !$omp parallel do
   do i=1,NL
@@ -211,6 +185,7 @@ Subroutine dt_evolve_omp_KB(zu)
   call psi_rho_RT(zu)
   NVTX_END()
 
+  if(no_update_func=='n')then
   NVTX_BEG('dt_evolve_omp_KB(): Hartree',5)
   call Hartree
   NVTX_END()
@@ -220,7 +195,7 @@ Subroutine dt_evolve_omp_KB(zu)
   call Exc_Cor(calc_mode_rt,NBoccmax,zu)
   NVTX_END()
 ! yabana
-
+  endif
 
 #ifdef _OPENACC
 !$acc kernels pcopy(Vloc) pcopyin(Vh,Vpsl,Vexc)
@@ -242,6 +217,7 @@ End Subroutine dt_evolve_omp_KB
 !--------10--------20--------30--------40--------50--------60--------70--------80--------90--------100-------110-------120-------130
 Subroutine dt_evolve_etrs_omp_KB(zu)
   use Global_Variables
+  use projector
   use timer
 #ifdef ARTED_USE_NVTX
   use nvtx
@@ -249,53 +225,25 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
   use opt_variables
   implicit none
   complex(8),intent(inout) :: zu(NL,NBoccmax,NK_s:NK_e)
-  integer    :: ik,ib
-  integer    :: ia,j,i,ix,iy,iz
-  real(8)    :: kr,dt_t
-  integer    :: thr_id,omp_get_thread_num,ikb
+  integer    :: ik,ib,ikb
+  integer    :: i
+  real(8)    :: dt_t
 
   NVTX_BEG('dt_evolve_omp_KB()',1)
   call timer_begin(LOG_DT_EVOLVE)
 
   dt_t = dt; dt = 0.5d0*dt
 
-!$acc data pcopy(zu, vloc) pcopyout(ekr_omp)
+!$acc data pcopy(zu, vloc) pcreate(zproj)
 
 !Constructing nonlocal part
   NVTX_BEG('dt_evolve_omp_KB(): nonlocal part',2)
-#ifdef _OPENACC
-!$acc kernels pcopy(ekr_omp) pcopyin(Mps, Jxyz,Jxx,Jyy,Jzz, kAc, Lx,Ly,Lz)
-!$acc loop collapse(2) independent gang
-#else
-  thr_id=0
-!$omp parallel private(thr_id)
-!$  thr_id=omp_get_thread_num()
-!$omp do private(ik,ia,j,i,ix,iy,iz,kr) collapse(2)
-#endif
-  do ik=NK_s,NK_e
-  do ia=1,NI
-!$acc loop independent vector(128)
-  do j=1,Mps(ia)
-    i=Jxyz(j,ia); ix=Jxx(j,ia); iy=Jyy(j,ia); iz=Jzz(j,ia)
-    kr=kAc(ik,1)*(Lx(i)*Hx-ix*aLx)+kAc(ik,2)*(Ly(i)*Hy-iy*aLy)+kAc(ik,3)*(Lz(i)*Hz-iz*aLz)
-    ekr_omp(j,ia,ik)=exp(zI*kr)
-  end do
-  end do
-  end do
-#ifdef _OPENACC
-!$acc end kernels
-#else
-!$omp end parallel
-#endif
+  call update_projector(kac)
   NVTX_END()
-
-
-!$acc update self(zu, ekr_omp, vloc)
 
   NVTX_BEG('dt_evolve_omp_KB(): hamiltonian',3)
   call hamiltonian(zu,.false.)
   NVTX_END()
-
 
   Vloc_t=Vloc
   Vloc_new(:) = 3d0*Vloc(:) - 3d0*Vloc_old(:,1) + Vloc_old(:,2)
@@ -304,40 +252,18 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
   Vloc(:) = Vloc_new(:)
 
   kAc=kAc_new
-!$acc update device(kAc)
+
+!$acc update device(kAc,Vloc)
 
 !Constructing nonlocal part
   NVTX_BEG('dt_evolve_omp_KB(): nonlocal part',2)
-#ifdef _OPENACC
-!$acc kernels pcopy(ekr_omp) pcopyin(Mps, Jxyz,Jxx,Jyy,Jzz, kAc, Lx,Ly,Lz)
-!$acc loop collapse(2) independent gang
-#else
-  thr_id=0
-!$omp parallel private(thr_id)
-!$  thr_id=omp_get_thread_num()
-!$omp do private(ik,ia,j,i,ix,iy,iz,kr) collapse(2)
-#endif
-  do ik=NK_s,NK_e
-  do ia=1,NI
-!$acc loop independent vector(128)
-  do j=1,Mps(ia)
-    i=Jxyz(j,ia); ix=Jxx(j,ia); iy=Jyy(j,ia); iz=Jzz(j,ia)
-    kr=kAc(ik,1)*(Lx(i)*Hx-ix*aLx)+kAc(ik,2)*(Ly(i)*Hy-iy*aLy)+kAc(ik,3)*(Lz(i)*Hz-iz*aLz)
-    ekr_omp(j,ia,ik)=exp(zI*kr)
-  end do
-  end do
-  end do
-#ifdef _OPENACC
-!$acc end kernels
-#else
-!$omp end parallel
-#endif
+  call update_projector(kac)
   NVTX_END()
 
 !== predictor-corrector ==
   select case(functional)
-  case('VS98','TPSS','TBmBJ','BJ_PW')
-!$acc update self(zu, ekr_omp, vloc)
+  case('VS98','TPSS','TBmBJ','BJ_PW','tbmbj','bj_pw')
+!$acc update self(zu, vloc)
 
 !$omp parallel do private(ik,ib)
      do ikb=1,NKB
@@ -353,6 +279,7 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
      call psi_rho_RT(zu)
      NVTX_END()
 
+     if(no_update_func=='n')then
      NVTX_BEG('dt_evolve_omp_KB(): Hartree',5)
      call Hartree
      NVTX_END()
@@ -360,6 +287,7 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
      NVTX_BEG('dt_evolve_omp_KB(): Exc_Cor',6)
      call Exc_Cor(calc_mode_rt,NBoccmax,zu)
      NVTX_END()
+     endif
 
 #ifdef _OPENACC
 !$acc kernels pcopy(Vloc) pcopyin(Vh,Vpsl,Vexc)
@@ -378,6 +306,7 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
         zu(:,ib,ik)=zu_GS(:,ib,ik)
      end do
 
+!$acc update device(zu, vloc)
   end select
 
 
@@ -389,6 +318,7 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
   call psi_rho_RT(zu)
   NVTX_END()
 
+  if(no_update_func=='n')then
   NVTX_BEG('dt_evolve_omp_KB(): Hartree',5)
   call Hartree
   NVTX_END()
@@ -396,7 +326,7 @@ Subroutine dt_evolve_etrs_omp_KB(zu)
   NVTX_BEG('dt_evolve_omp_KB(): Exc_Cor',6)
   call Exc_Cor(calc_mode_rt,NBoccmax,zu)
   NVTX_END()
-
+  endif
 
 #ifdef _OPENACC
 !$acc kernels pcopy(Vloc) pcopyin(Vh,Vpsl,Vexc)
@@ -419,51 +349,29 @@ End Subroutine dt_evolve_etrs_omp_KB
 !--------10--------20--------30--------40--------50--------60--------70--------80--------90--------100-------110-------120-------130
 Subroutine dt_evolve_omp_KB_MS(zu)
   use Global_Variables
+  use projector
   use timer
   use nvtx
   use opt_variables
   implicit none
   complex(8),intent(inout) :: zu(NL,NBoccmax,NK_s:NK_e)
-  integer    :: ik,ib
-  integer    :: ia,j,i,ix,iy,iz
-  real(8)    :: kr
-  integer    :: thr_id,omp_get_thread_num,ikb
+  integer    :: ik,ib,ikb
+  integer    :: i
 
   NVTX_BEG('dt_evolve_omp_KB_MS()',1)
   call timer_begin(LOG_DT_EVOLVE)
 
-!$acc data pcopy(zu, vloc) pcopyout(ekr_omp)
+!$acc data pcopy(zu, vloc) pcreate(zproj)
 
 !Constructing nonlocal part ! sato
   NVTX_BEG('dt_evolve_omp_KB_MS(): nonlocal part',2)
-#ifdef _OPENACC
-!$acc kernels pcopy(ekr_omp) pcopyin(Mps, Jxyz,Jxx,Jyy,Jzz, kAc, Lx,Ly,Lz)
-!$acc loop collapse(2) independent gang
-#else
-  thr_id=0
-!$omp parallel private(thr_id)
-!$  thr_id=omp_get_thread_num()
-!$omp do private(ik,ia,j,i,ix,iy,iz,kr) collapse(2)
-#endif
-  do ik=NK_s,NK_e
-  do ia=1,NI
-  do j=1,Mps(ia)
-    i=Jxyz(j,ia); ix=Jxx(j,ia); iy=Jyy(j,ia); iz=Jzz(j,ia)
-    kr=kAc(ik,1)*(Lx(i)*Hx-ix*aLx)+kAc(ik,2)*(Ly(i)*Hy-iy*aLy)+kAc(ik,3)*(Lz(i)*Hz-iz*aLz)
-    ekr_omp(j,ia,ik)=exp(zI*kr)
-  end do
-  end do
-  end do
-#ifdef _OPENACC
-!$acc end kernels
-#else
-!$omp end parallel
-#endif
+  call update_projector(kac)
+
 
 ! yabana
   select case(functional)
-  case('VS98','TPSS','TBmBJ','BJ_PW')
-!$acc update self(zu, ekr_omp, vloc)
+  case('VS98','TPSS','TBmBJ','BJ_PW','tbmbj','bj_pw')
+!$acc update self(zu, vloc)
 
 
 !$omp parallel do private(ik,ib)
@@ -483,8 +391,10 @@ Subroutine dt_evolve_omp_KB_MS(zu)
   call hamiltonian(zu,.false.)
 
   call psi_rho_RT(zu)
-  call Hartree
-  call Exc_Cor(calc_mode_rt,NBoccmax,zu)
+  if(no_update_func=='n')then
+     call Hartree
+     call Exc_Cor(calc_mode_rt,NBoccmax,zu)
+  endif
 
 !$omp parallel do
   do i=1,NL
@@ -505,6 +415,7 @@ Subroutine dt_evolve_omp_KB_MS(zu)
     zu(:,ib,ik)=zu_GS(:,ib,ik)
   end do
 
+!$acc update device(zu, vloc)
   end select
 ! yabana
 
@@ -516,6 +427,7 @@ Subroutine dt_evolve_omp_KB_MS(zu)
   call psi_rho_RT(zu)
   NVTX_END()
 
+  if(no_update_func=='n')then
   NVTX_BEG('dt_evolve_omp_KB_MS(): Hartree',5)
   call Hartree
   NVTX_END()
@@ -525,6 +437,7 @@ Subroutine dt_evolve_omp_KB_MS(zu)
   call Exc_Cor(calc_mode_rt,NBoccmax,zu)
   NVTX_END()
 ! yabana
+  endif
 
 #ifdef _OPENACC
 !$acc kernels pcopy(Vloc) pcopyin(Vh,Vpsl,Vexc)

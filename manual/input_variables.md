@@ -18,6 +18,8 @@
 - [&analysis](#analysis)
 - [&hartree](#hartree)
 - [&ewald](#ewald)
+>- [&opt](#opt)
+>- [&md](#md)
 
 ## &calculation
 <dl>
@@ -26,13 +28,6 @@
 <code>'RTLR'</code>,<code>'RTPulse'</code>, <code>'GS_RTLR'</code>, 
 and <code>'GS_RTPulse'</code>
 can be chosen.
-</dd>
-
-<dt>use_ehrenfest_md; <code>Character</code>; 0d/3d</dt>
-<dd>
-Enable(<code>'y'</code>)/disable(<code>'n'</code>) 
-Ehrenfest dynamics.
-Default is <code>'n'</code>.
 </dd>
 
 <dt>use_ms_maxwell; <code>Character</code>; 3d</dt>
@@ -49,36 +44,24 @@ force calculation.
 Default is <code>'n'</code>.
 </dd>
 
-<dt>use_geometry_opt; <code>Character</code>; 0d</dt>
-<dd>
-Enable(<code>'y'</code>)/disable(<code>'n'</code>) 
-geometry optimization.
-Default is <code>'n'</code>.
-</dd>
+><dt>use_ehrenfest_md; <code>Character</code>; 0d/3d</dt>
+><dd>
+>Enable(<code>'y'</code>)/disable(<code>'n'</code>) 
+>Ehrenfest molecular dynamics.
+>Default is <code>'n'</code>.
+></dd>
+
+><dt>use_geometry_opt; <code>Character</code>; 0d/3d</dt>
+><dd>
+>Enable(<code>'y'</code>)/disable(<code>'n'</code>) 
+>geometry optimization.
+>Default is <code>'n'</code>.
+></dd>
 
 </dl>
 
 ## &control
 <dl>
-
-<dt>restart_option; <code>Character</code>; 3d</dt>
-<dd>Flag for restart. <code>'new'</code> or 
-<code>'restart'</code> can be chosen.
-<code>'new'</code> is default.
-</dd>
-
-<dt>backup_frequency; <code>Integer</code>; 3d</dt>
-<dd>Frequency of backup during the time-propagation. 
-If <code>0</code> is set, the backup is not performed.
-Default is <code>0</code>.
-</dd>
-
-
-<dt>time_shutdown; <code>Real(8)</code>; 3d</dt>
-<dd>Timer for automatic shutdown. The unit is always second.
-If negative time is chosen, the automatic shutdown is not performed.
-Default is <code>-1</code> sec.
-</dd>
 
 <dt>sysname; <code>Character</code>; 0d/3d</dt>
 <dd>Name of calculation. This is used for a prefix of output files.
@@ -90,9 +73,74 @@ Default is <code>default</code>.
 Default is the current directoy, <code>./</code>.
 </dd>
 
-<dt>dump_filename; <code>Character</code>; 3d</dt>
-<dd>Name of a filename for the restart calculation.
-</dd>
+><dt>restart_option; <code>Character</code>; 3d</dt>
+><dd>Flag for restart. <code>'new'</code> or 
+><code>'restart'</code> can be chosen.
+><code>'new'</code> is default.
+></dd>
+
+><dt>backup_frequency; <code>Integer</code>; 3d</dt>
+><dd>Frequency of backup during the time-propagation. 
+>If <code>0</code> is set, the backup is not performed.
+>Default is <code>0</code>.
+></dd>
+
+><dt>time_shutdown; <code>Real(8)</code>; 3d</dt>
+><dd>Timer for automatic shutdown. The unit is always second.
+>If negative time is chosen, the automatic shutdown is not performed.
+>Default is <code>-1</code> sec.
+></dd>
+
+><dt>dump_filename; <code>Character</code>; 3d</dt>
+><dd>Name of a filename for the restart calculation.
+></dd>
+
+><dt>read_gs_wfn_k; <code>Character</code>; 3d</dt>
+><dd>
+>Read ground state wave function as initial guess (pre-calculated "gs_wfn_k" directory printed by <code>calc_mode=GS</code>) if this is <code>y</code>.
+>Default is <code>n</code>. (The option is available for restart of ground state SCF calculation, geometrical optimization, etc. But the data is automatically read when "calc_mode=RT")
+></dd>
+
+><dt>write_gs_wfn_k; <code>Character</code>; 3d</dt>
+><dd>
+>Write ground state wave function into "gs_wfn_k" directory if this is <code>y</code>. (Useful for <code>calc_mode=GS_RT</code>. But the data is always written in the case of <code>calc_mode=GS</code> calculation.) 
+>Default is <code>n</code>.
+></dd>
+
+><dt>modify_gs_wfn_k; <code>Character</code>; 3d</dt>
+><dd>
+>Option to modify initial guess wave function (pre-calculated "gs_wfn_k" directory) in combination with <code>read_gs_wfn_k = y</code>.
+>If <code>copy_1stk_to_all</code> is set, the first k-point data file, wfn_gs_k0000001.wfn (supposed to be obtained by gamma-point calculation), is copied to all other points.
+>Default is <code>n</code>.
+></dd>
+
+><dt>write_rt_wfn_k; <code>Character</code>; 3d</dt>
+><dd>
+>Write RT wave function into "rt_wfn_k" directory if this is <code>y</code>.
+>Default is <code>n</code>.
+></dd>
+
+><dt>read_rt_wfn_k; <code>Character</code>; 3d</dt>
+><dd>
+>Read RT wave function (pre-calculated "rt_wfn_k" directory printed by <code>calc_mode=RT</code> with <code>write_rt_wfn_k=y</code>) if this is <code>y</code>. This is used for restarting <code>calc_mode=RT</code> (supporting <code>use_ehrenfest_md=y</code>, too: Coordinates and velocities of atoms for restarting are also included), then, "gs_wfn_k" directory is also necessary (actually used only for some analysis options). Note that, currently, field is taken over after restarting only if <code>ae_shape1=AcosX</code> type is used.
+>Default is <code>n</code>.
+></dd>
+
+><dt>read_gs_wfn_k_ms; <code>Character</code>; 3d</dt>
+><dd>
+>Read ground state wave function as initial state for multiscale calculation. This should be used together with <code>use_ms_maxwell='y'</code>, <code>calc_mode='RT'</code> and <code>set_ini_coor_vel='y'</code>. The ground state wave function data must be pre-calculated for each configuration(or atomic coordinate) and be put the obtained directories 'gs_wfn_k' into specific directories: <code>directory</code>/multiscale/MXXXXXX/ where is the index number of the macro-grid point of the material region usually starting from '000001' up to the number of macro-grid point (the same place of 'ini_coor_vel.dat' used by the option <code>set_ini_coor_vel</code>).
+>Default is <code>n</code>.
+></dd>
+
+><dt>read_rt_wfn_k_ms; <code>Character</code>; 3d</dt>
+><dd> Read wave function and field information as initial state in multiscale calculation. These are generated in pre-calculation by using <code>write_rt_wfn_k_ms='y'</code>. If you give incident pulse from input file option, the field is added to the read initial data.
+>Default is <code>n</code>.
+></dd>
+
+><dt>write_rt_wfn_k_ms; <code>Character</code>; 3d</dt>
+><dd> Write wave function and field information at the last step in multiscale calculation. It is used for restarting by using <code>read_rt_wfn_k_ms='y'</code>. 
+>Default is <code>n</code>.
+></dd>
 
 
 </dl>
@@ -111,6 +159,10 @@ If <code>'A_eV_fs'</code>, Angstrom-eV-fs unit system is used.
 
 ## &parallel
 <dl>
+
+><dt>domain_parallel; <code>Character</code>; 3d</dt>
+><dd> If specified <code>domain_parallel='y'</code> and <code>&system/iperiodic=3</code>, program codes for domain parallel version run in periodic system calculations.
+></dd>
 
 <dt>nproc_ob/nproc_domain(3)/nproc_domain_s(3); <code>Integer</code>; 0d</dt>
 <dd> Followings are explanation of each variable.
@@ -203,10 +255,10 @@ by <code>nelec_spin(1)/nelec_spin(2)</code>.
 This option is incompatible with <code>nelec</code>
 </dd>
 
-<dt>temperature; <code>Real(8)</code>; 3d</dt>
-<dd>Temperature of electrons.
-Unit of the energy can be chosen <code>&units/unit_energy</code>.
-</dd>
+><dt>temperature; <code>Real(8)</code>; 3d</dt>
+><dd>Temperature of electrons.
+>Unit of the energy can be chosen <code>&units/unit_energy</code>.
+></dd>
 
 
 <dt>nelem; <code>Integer</code>; 0d/3d</dt>
@@ -217,25 +269,25 @@ Unit of the energy can be chosen <code>&units/unit_energy</code>.
 <dd>Number of atoms in a calculation cell.
 </dd>
 
-<dt>file_atom_red_coor; <code>Character</code></dt>
-<dd>File name of atomic positions. In this file, 
-the atomic coordinates can be written in reduced coordinates.
-This option is incompatible with 
-<code>&system/file_atom_coor</code>,
-<code>&atomic_coor</code>, and 
-<code>&atomic_red_coor</code>.
-</dd>
+><dt>file_atom_red_coor; <code>Character</code></dt>
+><dd>File name of atomic positions. In this file, 
+>the atomic coordinates can be written in reduced coordinates.
+>This option is incompatible with 
+><code>&system/file_atom_coor</code>,
+><code>&atomic_coor</code>, and 
+><code>&atomic_red_coor</code>.
+></dd>
 
-<dt>file_atom_coor; <code>Character</code>; 0d</dt>
-<dd>File name of atomic positions. In this file, 
-the atomic coordinates can be written in Cartesian cooridnates.
-The unit of the length can be chosen by 
-<code>&units/unit_length</code>.
-This option is incompatible with 
-<code>&system/file_atom_red_coor</code>,
-<code>&atomic_coor</code>, and 
-<code>&atomic_red_coor</code>.
-</dd>
+><dt>file_atom_coor; <code>Character</code>; 0d</dt>
+><dd>File name of atomic positions. In this file, 
+>the atomic coordinates can be written in Cartesian cooridnates.
+>The unit of the length can be chosen by 
+><code>&units/unit_length</code>.
+>This option is incompatible with 
+><code>&system/file_atom_red_coor</code>,
+><code>&atomic_coor</code>, and 
+><code>&atomic_red_coor</code>.
+></dd>
 
 
 </dl>
@@ -278,39 +330,39 @@ This option is incompatible with
 <dd>Name of pseudopotential files.
 </dd>
 
-<dt>Lmax_ps(:); <code>Integer</code>; 0d/3d</dt>
+<dt>lmax_ps(:); <code>Integer</code>; 0d/3d</dt>
 <dd>Maximum angular momentum of pseudopotential projectors.
 </dd>
 
-<dt>Lloc_ps(:); <code>Integer</code>; 0d/3d</dt>
+<dt>lloc_ps(:); <code>Integer</code>; 0d/3d</dt>
 <dd>Angular momentum of pseudopotential thant will be treated as local.
 </dd>
 
-<dt>iZatom(:); <code>Integer</code>; 0d/3d</dt>
+<dt>izatom(:); <code>Integer</code>; 0d/3d</dt>
 <dd>Atomic number.
 </dd>
 
 
-<dt>psmask_option(:); <code>Character</code>; 3d</dt>
-<dd>Enable(<code>'y'</code>)/disable(<code>'n'</code>) 
-Fourier filtering for pseudopotentials. 
-Default is <code>'n'</code>.
-</dd>
+><dt>psmask_option(:); <code>Character</code>; 3d</dt>
+><dd>Enable(<code>'y'</code>)/disable(<code>'n'</code>) 
+>Fourier filtering for pseudopotentials. 
+>Default is <code>'n'</code>.
+></dd>
 
-<dt>alpha_mask(:); <code>Real(8)</code>; 3d</dt>
-<dd>Parameter for the Fourier filtering for pseudopotential.
-Default is <code>'0.8'</code>.
-</dd>
+><dt>alpha_mask(:); <code>Real(8)</code>; 3d</dt>
+><dd>Parameter for the Fourier filtering for pseudopotential.
+>Default is <code>'0.8'</code>.
+></dd>
 
-<dt>gamma_mask(:); <code>Real(8)</code>; 3d</dt>
-<dd>Parameter for the Fourier filtering for pseudopotential.
-Default is <code>'1.8'</code>.
-</dd>
+><dt>gamma_mask(:); <code>Real(8)</code>; 3d</dt>
+><dd>Parameter for the Fourier filtering for pseudopotential.
+>Default is <code>'1.8'</code>.
+></dd>
 
-<dt>eta_maskk(:); <code>Real(8)</code></dt>
-<dd>Parameter for the Fourier filtering for pseudopotential.
-Default is <code>'15.0'</code>.
-</dd>
+><dt>eta_maskk(:); <code>Real(8)</code></dt>
+><dd>Parameter for the Fourier filtering for pseudopotential.
+>Default is <code>'15.0'</code>.
+></dd>
 
 </dl>
 
@@ -346,6 +398,12 @@ John P. Perdew and Yue Wang, Phys. Rev. B 45, 13244 (1992).
 by the formula in the original paper [Phys. Rev. Lett. 102, 226401 (2008)].
 Default is <code>'1.0'</code>.
 </dd>
+
+><dt>no_update_func; <code>character(1)</code>; 3d</dt>
+><dd>Option not to update functional (or Hamiltonian) in RT time step, i.e., keep ground state Hamiltonian during time-evolution.
+>Default is <code>'n'</code>.
+></dd>
+
 </dl>
 
 ## &rgrid
@@ -410,12 +468,6 @@ Time step. Unit of time can be chosen by <code>
 ## &propagation
 <dl>
 
-<dt>n_hamil; <code>Integer</code>; 0d</dt>
-<dd>
-Order of Taylor expansion of a propagation operator.
-Default is <code>4</code>.
-</dd>
-
 <dt>propagator; <code>Character</code>; 3d</dt>
 <dd>
 Choice of Propagator.
@@ -428,10 +480,21 @@ Comput. Phys. Commun., 151 60 (2003)].
 Default is <code>middlepoint</code>.
 </dd>
 
+><dt>n_hamil; <code>Integer</code>; 0d</dt>
+><dd>
+>Order of Taylor expansion of a propagation operator.
+>Default is <code>4</code>.
+></dd>
+
 </dl>
 
 ## &scf
 <dl>
+
+<dt>nscf; <code>Integer</code>; 0d/3d</dt>
+<dd>
+Number of maximum scf cycle.
+</dd>
 
 <dt>amin_routine; <code>Character</code>; 0d</dt>
 <dd>
@@ -470,33 +533,23 @@ Parameter of the modified-Broyden method.
 Default is <code>0.75</code>.
 </dd>
 
-<dt>fsset_option; <code>Character</code>; 3d</dt>
-<dd>
-Probably, we should remove this function
-since we can replace it with occupaion smoothing with temepratre.
-</dd>
+><dt>fsset_option; <code>Character</code>; 3d</dt>
+><dd>
+>Probably, we should remove this function
+>since we can replace it with occupaion smoothing with temepratre.
+></dd>
 
-<dt>nfsset_start; <code>Integer</code>; 3d</dt>
-<dd>
-Probably, we should remove this function
-since we can replace it with occupaion smoothing with temepratre.
-</dd>
+><dt>nfsset_start; <code>Integer</code>; 3d</dt>
+><dd>
+>Probably, we should remove this function
+>since we can replace it with occupaion smoothing with temepratre.
+></dd>
 
-<dt>nfsset_every; <code>Integer</code>; 3d</dt>
-<dd>
-Probably, we should remove this function
-since we can replace it with occupaion smoothing with temepratre.
-</dd>
-
-<dt>nscf; <code>Integer</code>; 0d/3d</dt>
-<dd>
-Number of maximum scf cycle.
-</dd>
-
-<dt>ngeometry_opt; <code>Integer</code>; 0d</dt>
-<dd>
-Number of iteration of geometry optimization.
-</dd>
+><dt>nfsset_every; <code>Integer</code>; 3d</dt>
+><dd>
+>Probably, we should remove this function
+>since we can replace it with occupaion smoothing with temepratre.
+></dd>
 
 <dt>subspace_diagonalization; <code>Character</code>; 0d</dt>
 <dd>
@@ -504,40 +557,75 @@ Number of iteration of geometry optimization.
 subspace diagonalization during scf cycle.
 </dd>
 
-<dt>convergence; <code>Character</code>; 0d</dt>
+<dt>convergence; <code>Character</code>; 0d/3d</dt>
 <dd>
 Choice of quantity that is used for convergence check in a scf calculation. 
-Default is <code>'rho_dng'</code>. The following can be chosen.
+Default is <code>'rho_dne'</code>. 
 <ul>
 <li>
-<code>'rho'</code>: Convergence is checked by ||rho(i)-rho(i-1)||<sup>2</sup>, where i is an iteration number of the scf calculation.
+<code>'rho_dne'</code>: Convergence is checked by sum_ix|rho(ix,iter)-rho(ix,iter-1)|dx/N, where iter is an iteration number of the scf calculation and N is <code>&system/nelec</code>, the number of the valence electrons.
+</li>
+</ul>
+
+For isolated systems, the followings can also be chosen.
+<ul>
+<li>
+<code>'norm_rho'</code>: Convergence is checked by the square of the norm of difference of density, ||rho_iter(ix)-rho_iter-1(ix)||<sup>2</sup>=sum_ix|rho(ix,iter)-rho(ix,iter-1)|<sup>2</sup>. 
 </li>
 
 <li>
-<code>'rho_dng'</code>: Convergence is checked by ||rho(i)-rho(i-1)||<sup>2</sup>/(number of grids). "dng" means "devided by number of grids".
+<code>'norm_rho_dng'</code>: Convergence is checked by ||rho_iter(ix)-rho_iter-1(ix)||<sup>2</sup>/(number of grids). "dng" means "devided by number of grids".
 </li>
 
 <li>
-<code>'pot'</code>: Convergence is checked by ||Vlocal(i)-Vlocal(i-1)||<sup>2</sup>, where Vlocal is Vh + Vxc + Vps_local.
+<code>'norm_pot'</code>: Convergence is checked by ||Vlocal_iter(ix)-Vlocal_iter-1(ix)||<sup>2</sup>, where Vlocal is Vh + Vxc + Vps_local.
 </li>
 
 <li>
-<code>'pot_dng'</code>: Convergence is checked by ||Vlocal(i)-Vlocal(i-1)||<sup>2</sup>/(number of grids).
+<code>'pot_dng'</code>: Convergence is checked by ||Vlocal_iter(ix)-Vlocal_iter-1(ix)||<sup>2</sup>/(number of grids).
 </li>
 </ul>
 </dd>
 
-<dt>threshold; <code>Real(8)</code>; 0d</dt>
+<dt>threshold; <code>Real(8)</code>; 0d/3d</dt>
 <dd>
-Threshold for convergence check that is used when either <code>'rho'</code> or <code>'rho_dng'</code> is specified.
-Default is <code>1d-17</code> a.u. (= 6.75d-17Å<sup>-3</sup>)
+Threshold for convergence check that is used when <code>'rho_dne'</code> is specified.
+Default is <code>1d-17</code>. 
 </dd>
 
-<dt>threshold_pot; <code>Real(8)</code>; 0d</dt>
+<dt>threshold_norm_rho; <code>Real(8)</code>; 0d</dt>
 <dd>
-Threshold for convergence check that is used when either <code>'pot'</code> or <code>'pot_dng'</code> is specified. <code>threshold_pot</code> must be set when either <code>'pot'</code> or <code>'pot_dng'</code> is specified.
-Default is <code>-1d0</code> a.u. (1 a.u.= 1.10d2 Å<sup>3</sup>eV<sup>2</sup>)
+Threshold for convergence check that is used when either <code>'norm_rho'</code> or <code>'norm_rho_dng'</code> is specified. <code>threshold_norm_rho</code> must be set when either <code>'norm_rho'</code> or <code>'norm_rho_dng'</code> is specified.
+Default is <code>-1d0</code> a.u. (1 a.u.= 45.54Å<sup>-6</sup>)
 </dd>
+
+<dt>threshold_norm_pot; <code>Real(8)</code>; 0d</dt>
+<dd>
+Threshold for convergence check that is used when either <code>'norm_pot'</code> or <code>'norm_pot_dng'</code> is specified. <code>threshold_norm_pot</code> must be set when either <code>'norm_pot'</code> or <code>'norm_pot_dng'</code> is specified.
+Default is <code>-1d0</code> a.u. (1 a.u.= 33.72x10<sup>4</sup> Å<sup>-6</sup>eV<sup>2</sup>)
+</dd>
+
+<dt>omp_loop; <code>Character</code>; 3d</dt>
+<dd>
+Loop for OpenMP parallelization if periodic boundary system is used. 
+<li>
+<code>k</code>: parallelization by k-point loop (Default).
+</li>
+<li>
+<code>b</code>: parallelization mainly by band orbital loop (sometimzes space grid loop too). This works efficiently if the number of k-point to be calculated in a node is small (e.x. the case of single k-point for each node)
+</li>
+</dd>
+
+><dt>skip_gsortho; <code>Character</code>; 3d</dt>
+><dd>
+>Flag to skip Gram-Schmidt orthogonalization in CG loop if periodic boundary system is used. If this is skipped the more iteration number is necessary to get convergence but each iteration step gets faster. If <code>omp_loop=b</code>, this flag is always applied.
+>Default is <code>n</code>
+></dd>
+
+><dt>ngeometry_opt; <code>Integer</code>; 0d</dt>
+><dd>
+>Number of iteration of geometry optimization.
+></dd>
 
 </dl>
 
@@ -586,7 +674,7 @@ and <code>'Esin2sin'</code>, <code>'Asin2cos'</code>, <code>'Asin2cw'</code>,
 <dd>
 Momentum of impulsive perturbation.
 This valiable has the dimention of momentum, energy*time/length.
-Defalt value is <code>1d-2</code> a.u.
+Default value is <code>1d-2</code> a.u.
 </dd>
 
 <dt>amplitude1/amplitude2; <code>Real(8)</code>; 0d/3d</dt>
@@ -628,6 +716,13 @@ Carrier emvelope phase of the first/second pulse.
 Default is <code>0d0/0d0</code>.
 </dd>
 
+<dt>t1_delay; <code>Real(8)</code>; 3d</dt>
+<dd>
+Time-delay of the first pulses.
+Unit of time can be chosen by <code>&units/unit_time</code>.
+Default is <code>0d0</code>.
+</dd>
+
 <dt>t1_t2; <code>Real(8)</code>; 0d/3d</dt>
 <dd>
 Time-delay between the first and the second pulses.
@@ -646,17 +741,41 @@ Default is <code>'n'</code>.
 Form of a quadrupole potential.
 </dd>
 
-<dt>alocal_laser; <code>Character</code>; 0d</dt>
+><dt>alocal_laser; <code>Character</code>; 0d</dt>
+><dd>
+>The pulse is applied to a specific domain.
+>Default is <code>'n'</code>.
+></dd>
+
+><dt>rlaserbound_sta(3)/rlaserbound_end(3); <code>Real(8)</code>; 0d</dt>
+><dd>
+>The edge of the domain where the pulse is applied.
+>These parameters are effective only when <code>alocal_laser</code> is <code>'y'</code>.
+>Default is <code>-1d7/1d7</code> in atomic unit.
+>Unit of length can be chosen by <code>&units/unit_length</code>.
+></dd>
+
+<dt>nump; <code>integer</code>; 0d</dt>
 <dd>
-The pulse is applied to a specific domain.
-Default is <code>'n'</code>.
+Number of radiation sources for optical near fields.
+Maximum number is <code>2</code>.
 </dd>
 
-<dt>rlaserbound_sta(3)/rlaserbound_end(3); <code>Real(8)</code>; 0d</dt>
+<dt>vecp(3,2); <code>Real(8)</code>; 0d</dt>
 <dd>
-The edge of the domain where the pulse is applied.
-These parameters are effective only when <code>alocal_laser</code> is <code>'y'</code>.
-Default is <code>-1d7/1d7</code> in atomic unit.
+Dipole vectors of the radiation sources for the optical near fields.
+Unit of length can be chosen by <code>&units/unit_length</code>.
+</dd>
+
+<dt>coop(3,2); <code>Real(8)</code>; 0d</dt>
+<dd>
+Central coordinates of the dipole vectors of the radiation sources.
+Unit of length can be chosen by <code>&units/unit_length</code>.
+</dd>
+
+<dt>radp_diele; <code>Real(8)</code>; 0d</dt>
+<dd>
+Radii of dielectric spheres for the radiation sources.
 Unit of length can be chosen by <code>&units/unit_length</code>.
 </dd>
 
@@ -668,14 +787,15 @@ Unit of length can be chosen by <code>&units/unit_length</code>.
 <dt>fdtddim; <code>Character</code>; 3d</dt>
 <dd>
 Dimension of FDTD calculation for multi-scale Maxwell-Kohn-Sham method.
-Defalt value is <code>'1D'</code>.
+<code>1d,2d,3d</code> is available in the present version.
+Default value is <code>'1D'</code>. 
 </dd>
 
 <dt>twod_shape; <code>Character</code>; 3d</dt>
 <dd>
 Boundary condision of the second dimension for FDTD calculation with 
 multi-scale Maxwell-Kohn-Sham method.
-Defalt value is <code>'periodic'</code>.
+Default value is <code>'periodic'</code>.
 </dd>
 
 <dt>nx_m/ny_m/nz_m; <code>Integer</code>; 3d</dt>
@@ -689,17 +809,6 @@ Spacing of macroscopic grid points inside materials for (x/y/z)-direction.
 Unit of length can be chosen by <code>&units/unit_length</code>.
 </dd>
 
-<dt>nksplit; <code>Integer</code>; 3d</dt>
-<dd>
-Number of MPI processers that take care electron dynamics at each single macroscopic 
-point. 
-</dd>
-
-<dt>nxysplit; <code>Integer</code>; 3d</dt>
-<dd>
-Number of macroscopic points that will be taken care by a single MPI processer.
-</dd>
-
 <dt>nxvacl_m/nxvacr_m; <code>Integer</code>; 3d</dt>
 <dd>
 Number of macroscopic grid points for vacumm region.
@@ -707,6 +816,31 @@ Number of macroscopic grid points for vacumm region.
 while
 <code>nxvacr_m</code> gives the number for positive x-direction behind the material.
 </dd>
+
+<dt>nx_origin_m/ny_origin_m/nz_origin_m; <code>Integer</code>; 3d</dt>
+<dd>
+Origin coordinat of the grid points.
+Default value is <code>'1'</code>.
+</dd>
+
+><dt>set_ini_coor_vel; <code>Character</code>; 3d</dt>
+><dd>
+>Set initial atomic coordinates and velocities for each macro-grid point. This must be given with specific directories and files: 
+>Prepare <code>directory</code>/multiscale/MXXXXXX/ini_coor_vel.dat, where 'XXXXXX' is the index number of the macro-grid point of the material region usually starting from '000001' up to the number of macro-grid point. The format of the file 'ini_coor_vel.dat' is just Rx, Ry, Rz, Vx, Vy, Vz (with space separation) for each atom (i.e. for each line), where the unit of the coordinates, Rx, Ry, Rz, is angstrom or a.u. speficied by <code>unit_system</code> but that of velocities is always a.u.. This option should be used together with <code>read_gs_wfn_k_ms</code> which is the option to read the ground state wave function for each macro-grid point. 
+>Default value is <code>'y'</code>.
+></dd>
+
+><dt>nmacro_write_group; <code>Integer</code>; 3d</dt>
+><dd>
+>If the number of macroscopic grids are very large, computers can be unstable by writing all information of all macroscopic grid points at the same time. To avoid that, the writings are divided by specifying this option. Writings will be done by each <code>nmacro_write_group</code> macroscopic grid points. (this number must be aliquot part of the total number of macroscopic grid points)
+>Default value is <code>'-1'</code>.
+></dd>
+
+><dt>file_macropoint; <code>Character</code>; 3d</dt>
+><dd>
+>If this variable is specified, the coordinates of the macropoints are set from the file.
+>Default value is <code>''</code>.
+></dd>
 
 </dl>
 
@@ -730,6 +864,21 @@ Methods of projection.
 </ul>
 </dd>
 
+><dt>projection_decomp; <code>Character</code>; 3d</dt>
+><dd>
+>If <code>'atom'</code> combined with <code>projection_option='gs'</code>, 
+>the number of excited electron is decomposed into each atom 
+>(this is printed in <code>SYSname</code>_nex_atom.data)
+>Default is <code>'n'</code>.
+></dd>
+
+<dt>out_projection_step; <code>Integer</code>; 3d</dt>
+<dd>
+Interval time step of projection analysis 
+if <code>projection_option</code> is not <code>'no'</code>.
+Default is <code>100</code>.
+</dd>
+
 <dt>nenergy; <code>Integer</code>; 0d/3d</dt>
 <dd>
 Number of energy grids for analysis.
@@ -741,9 +890,10 @@ Energy spacing for analysis.
 Unit of energy can be chosen by <code>&units/unit_energy</code>
 </dd>
 
-<dt>out_psi; <code>Character</code>; 0d</dt>
+<dt>out_psi; <code>Character</code>; 0d/3d</dt>
 <dd>
 If <code>'y'</code>, wavefunctions are output.
+For periodic system (<code>iperiodic=3</code>), it works only for ground state calculation. The converged wave functions of all orbitals with all k-points are printed in gs_wfn_cube or gs_wfn_vtk directory. The format is speficied by <code>format3d</code>. 
 Default is <code>'n'</code>.
 </dd>
 
@@ -808,16 +958,22 @@ If <code>'y'</code>, density is output.
 Default is <code>'n'</code>.
 </dd>
 
-<dt>out_elf; <code>Character</code>; 0d</dt>
-<dd>
-If <code>'y'</code>, electron localization function is output.
-Default is <code>'n'</code>.
-</dd>
-
 <dt>out_dns_rt/out_dns_rt_step; <code>Character/Integer</code>; 0d/3d</dt>
 <dd>
 If <code>'y'</code>, density during real-time time-propagation is output
 every <code>outdns_rt_step</code> time steps.
+Default is <code>'n'</code>.
+</dd>
+
+><dt>out_dns_trans/out_dns_trans_energy; <code>Character/Real(8)</code>; 3d</dt>
+><dd>
+>If <code>'y'</code>, transition in different density from the ground state at specified field frequency omega(given by <code>out_dns_trans_energy</code>) is calculated by drho(r,omega)=FT(rho(r,t)-rho_gs(r))/T.
+>Default is <code>'n'/1.55eV</code>.
+></dd>
+
+<dt>out_elf; <code>Character</code>; 0d</dt>
+<dd>
+If <code>'y'</code>, electron localization function is output.
 Default is <code>'n'</code>.
 </dd>
 
@@ -837,6 +993,22 @@ every <code>out_estatic_rt_step</code> time steps.
 Default is <code>'n'</code>.
 </dd>
 
+><dt>out_rvf_rt/out_rvf_rt_step; <code>Character/Integer</code>; 3d</dt>
+><dd>
+>If <code>'y'</code>, coordinates[A], velocities[au], forces[au] on atoms
+>during real-time time-propagation are printed in <code>SYSname</code>_trj.xyz
+>every <code>out_rvf_rt_step</code> time steps.
+>If <code>use_ehrenfest_md='y'</code>, 
+>the printing option is automatically turned on.
+>Defaults are <code>'n'/10</code>.
+></dd>
+
+><dt>out_tm; <code>Character</code>; 3d</dt>
+><dd>
+>If <code>'y'</code>, trandition moments between occupied and virtual orbitals are printed into <code>SYSname</code>_tm.data after the ground state calculation.
+>Defaults are <code>'n'/10</code>.
+></dd>
+
 <dt>format3d; <code>Character</code>; 0d/3d</dt>
 <dd>
 Format for three dimensional data.
@@ -853,14 +1025,14 @@ Effective only when <code>format3d</code> is <code>'avs'</code>.
 Default is <code>1</code>.
 </dd>
 
-<dt>timer_process; <code>Character</code>; 0d</dt>
-<dd>
-Basically, elapsed times are written in the output file. 
-But if <code>timer_process</code> is <code>'y'</code>, 
-files of elapsed times for every process are also generated. 
-This variable is effective only for the real-time caululation.
-Default is <code>'n'</code>.
-</dd>
+><dt>timer_process; <code>Character</code>; 0d</dt>
+><dd>
+>Basically, elapsed times are written in the output file. 
+>But if <code>timer_process</code> is <code>'y'</code>, 
+>files of elapsed times for every process are also generated. 
+>This variable is effective only for the real-time caululation.
+>Default is <code>'n'</code>.
+></dd>
 
 </dl>
 
@@ -910,270 +1082,397 @@ Default is <code>0.5</code>.
 
 </dl>
 
-***
-
-**Following variables are moved from the isolated part. Some of them may be added to common input, be combined to it, and be removed.**
-
-## &group_fundamental
-<dl>
-
-<dt>iditerybcg; <code>Integer</code>; 0d</dt>
-<dd>
-Iterations for which ybcg is calculated if <code>&scf/amin_routine</code> is 'cg-diis'</code>.
-Default is <code>20</code>.
-</dd>
-
-<dt>iditer_nosubspace_diag; <code>Integer</code>; 0d</dt>
-<dd>
-Iterations for which subspace diagonalization is not done if <code>&scf/subspace_diagonalization</code> is 'y'</code>.
-Default is <code>10</code>.
-</dd>
-
-<dt>ntmg; <code>Integer</code>; 0d</dt>
-<dd>
-Number of multigrid calculation for gs. At the moment, there is a malfunction in this variable, and recovery is needed.
-Default is <code>1</code>.
-</dd>
-
-<dt>idisnum(2); <code>Integer</code>; 0d</dt>
-<dd>
-Label numbers for two atoms which are measured the distance. 
-Default is <code>(/1,2/)</code>.
-</dd>
-
-<dt>iwrite_projection; <code>Integer</code>; 0d</dt>
-<dd>
-A variable for projection. 
-Default is <code>0</code>.
-</dd>
-
-<dt>itwproj; <code>Integer</code>; 0d</dt>
-<dd>
-The projection is calculated every <code>itwproj</code> time steps. 
-Default is <code>-1</code>.
-</dd>
-
-<dt>iwrite_projnum; <code>Integer</code>; 0d</dt>
-<dd>
-There is a malfunction in this variable.
-</dd>
-
-<dt>itcalc_ene; <code>Integer</code>; 0d</dt>
-<dd>
-Total energy is calculated every <code>itcalc_ene</code> time steps. There may be a malfunction in this variable.
-Default is <code>1</code>.
-</dd>
-
-</dl>
-
-## &group_parallel
-<dl>
-<dt>isequential; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine the way of assignment of processes.
-Default is <code>2</code>.
-</dd>
-
-<dt>imesh_s_all; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine how to use processes if total number of processes 
-and number of processes for Hartree/Exc calculation differ. 
-There may be a malfunction in this variable.
-Default is <code>1</code>.
-</dd>
-
-<dt>iflag_comm_rho; <code>Integer</code>; 0d</dt>
-<dd>
-This variable may be removed. 
-</dd>
-
-</dl>
-
-## &group_hartree
-<dl>
-<dt>hconv; <code>Real(8)</code>; 0d</dt>
-<dd>
-A convergence value for the Hartree-cg calculation. 
-The convergence is checked by ||tVh(i)-tVh(i-1)||<sup>2</sup>/(number of grids).
-Default is <code>1d-15</code> a.u. (= 1.10d-13 Å<sup>3</sup>eV<sup>2</sup>)
-</dd>
-
-<dt>lmax_meo; <code>Integer</code>; 0d</dt>
-<dd>
-A maximum angular momentum for multipole expansion in the Hartree-cg calculation. 
-Default is <code>4</code>.
-</dd>
-
-</dl>
-
-## &group_file
-<dl>
-<dt>ic; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to check whether reentrance is done or not in the ground state calculation. 
-Default is <code>0</code> 
-</dd>
-
-<dt>oc; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to check whether intermediate files are generated in the ground state calculation. 
-Default is <code>1</code>.
-</dd>
-
-<dt>ic_rt; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to check whether reentrance is done or not in the time propagation calculation. 
-Default is <code>0</code> 
-</dd>
-
-<dt>oc; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to check whether intermediate files are generated in the time propagation calculation. 
-Default is <code>0</code>.
-</dd>
-
-</dl>
-
-## &group_file
-<dl>
-<dt>iparaway_ob; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine the way of division for orbitals. 
-<code>1</code> is block division, and <code>2</code> is cyclic division.
-Default is <code>2</code> 
-</dd>
-
-<dt>iscf_order; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine the order of the calculation for the ground state one. 
-Default is <code>1</code>.
-</dd>
-
-<dt>iswitch_orbital_mesh; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to apply descending order for orbitals in the ground state calculation.
-Default is <code>0</code> 
-</dd>
-
-<dt>iflag_psicube; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to generate cube files for wave functions. This variable will be removed.
-</dd>
-
-<dt>lambda1_diis/lambda2_diis; <code>Real(8)</code>; 0d</dt>
-<dd>
-Parameters for the diis calculation.
-Default is <code>0.5/0.3</code>.
-</dd>
-
-<dt>file_ini; <code>Character</code>; 0d</dt>
-<dd>
-A input file to align wavefunctions. 
-Default is <code>'file_ini'</code>.
-</dd>
-
-<dt>num_projection; <code>Interger</code>; 0d</dt>
-<dd>
-Number of orbitals to write projections.
-Default is <code>1</code>.
-</dd>
-
-<dt>iwrite_projection_ob(200); <code>Interger</code>; 0d</dt>
-<dd>
-Orbital number to be written as projections.
-Default is <code>(1/2/3/.../200)</code>.
-</dd>
-
-<dt>iwrite_projection_k(200); <code>Interger</code>; 0d</dt>
-<dd>
-This variable will be removed.
-</dd>
-
-<dt>filename_pot; <code>Character</code>; 0d</dt>
-<dd>
-Name of file to be written local potentials. 
-Default is <code>'pot'</code>.
-</dd>
-
-<dt>iwrite_external; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to generate file to be written local potentials. 
-Default is <code>0</code>.
-</dd>
-
-<dt>iflag_dip2; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine whether dipole moments are calculated in divided area. 
-Default is <code>0</code>.
-</dd>
-
-<dt>iflag_intelectron; <code>Integer</code>; 0d</dt>
-<dd>
-A variable related to the quadrupole caluclation.
-Default is <code>0</code>.
-</dd>
-
-<dt>num_dip2; <code>Integer</code>; 0d</dt>
-<dd>
-Number of area where dipole moments are calculated.
-Default is <code>1</code>.
-</dd>
-
-<dt>dip2boundary(100); <code>Real(8)</code>; 0d</dt>
-<dd>
-Boundary position of area where dipole moments are calculated.
-Default is <code>0</code> a.u.
-</dd>
-
-<dt>dip2center(100); <code>Real(8)</code>; 0d</dt>
-<dd>
-Origin in the dipole moment calculation. 
-Default is <code>0</code> a.u.
-</dd>
-
-<dt>iflag_fourier_omega; <code>integer</code>; 0d</dt>
-<dd>
-A variable to determine whether Fourier transformation of 3d data for difference of density is calclated. 
-Default is <code>0</code>.
-</dd>
-
-<dt>num_fourier_omega; <code>Integer</code>; 0d</dt>
-<dd>
-Number of energies for which the Fourier transformation is calclated. 
-Default is <code>1</code>.
-</dd>
-
-<dt>fourier_omega(200); <code>Real(8)</code>; 0d</dt>
-<dd>
-Energies for which the Fourier transformation is calclated. 
-Default is <code>0</code> a.u.
-</dd>
-
-<dt>itotntime2; <code>Integer</code>; 0d</dt>
-<dd>
-Number of time steps in the reentrance for real-time calculation.
-There may be a malfunction in this variable.
-Default is <code>0</code>.
-</dd>
-
-<dt>iwdenoption; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine whether 3d output is generated in real-time calculation. 
-This variable will be removed.
-</dd>
-
-<dt>iwdenstep; <code>Integer</code>; 0d</dt>
-<dd>
-3d output is generated every <code>iwdenstep</code> time steps.
-This variable will be removed.
-</dd>
-
-<dt>iflag_estatic; <code>Integer</code>; 0d</dt>
-<dd>
-A variable to determine whether 3d output for the static electric field is generated in real-time calculation. 
-This variable will be removed.
-</dd>
+>## &opt
+><dl>
+>
+><dt>cg_alpha_up; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Parameter for up-rate of step length in line search in conjugated gradient method.
+>Default is <code>1.3</code>.
+></dd>
+>
+><dt>cg_alpha_down; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Parameter for down-rate of step length in line search in conjugated gradient method.
+>Default is <code>0.5</code>.
+></dd>
+>
+><dt>cg_alpha_ini; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Parameter for initial step length in line search in conjugated gradient method. (currently not available)
+>Default is <code>0.8</code>.
+></dd>
+>
+><dt>convrg_scf_ene; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Convergence threshold of SCF calculation in energy difference. If negative number no threshold (SCF loop is up to <code>Nscf</code>). The other SCF thresholds such as <code>threshold</code> in <code>&scf</code> are also applied (if you do not want to use it, set very small number). 
+>Default is <code>-1.0</code>.
+></dd>
+>
+><dt>convrg_scf_force; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Convergence threshold of SCF calculation in force (average over atoms) difference. If negative number no threshold (SCF loop is up to <code>Nscf</code>). The other SCF thresholds such as <code>threshold</code> in <code>&scf</code> are also applied (if you do not want to use it, set very small number). 
+>Default is <code>-1.0</code>.
+></dd>
+>
+><dt>convrg_opt_fmax; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Convergence threshold of optimization in maximum force.
+>Default is <code>1d-3</code>.
+></dd>
+>
+><dt>convrg_opt_ene; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Convergence threshold of optimization in energy difference. (currently not available)
+>Default is <code>1d-6</code>.
+></dd>
+>
+></dl>
 
 
+>## &md
+><dl>
+>
+><dt>ensemble; <code>Character</code>; 3d</dt>
+><dd>
+>Ensemble in MD option: "NVE" or "NVT"
+>Default is <code>"NVE"</code>.
+></dd>
+>
+><dt>thermostat; <code>Character</code>; 3d</dt>
+><dd>
+>Thermostat in "NVT" option: (currently only <code>nose-hoover</code>)
+>Default is <code>"nose-hoover"</code>.
+></dd>
+>
+><dt>step_velocity_scaling; <code>Integer</code>; 3d</dt>
+><dd>
+>Time step interval for velocity-scaling. Velocity-scaling is applied if this is set to positive.
+>Default is <code>-1</code>.
+></dd>
+>
+><dt>step_update_ps/step_update_ps2; <code>Integer/Integer</code>; 3d</dt>
+><dd>
+>Time step interval for updating pseudopotential (Larger number makes calculation time reduce greatly, but gets inaccurate) in case of <code>use_ehrenfest_md=y</code>. <code>step_update_ps</code> is for full update and <code>step_update_ps2</code> is for update without changing grid points array.
+>Default is <code>10/1</code>.
+></dd>
+>
+><dt>temperature0_ion; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Setting temperature in NVT ensemble and velocity scaling and for generating initial velocities.
+>Default is <code>298.15</code>.
+></dd>
+>
+><dt>set_ini_velocity; <code>Character</code>; 3d</dt>
+><dd>
+>Initial velocities are set.
+>Default is <code>n</code>.
+><ul>
+><li>
+><code>y</code>: Generate initial velocity with Maxwell-Bortzman distribution.
+></li>
+><li>
+><code>r</code>: Read initial velocity from file specified by keyword of <code>file_ini_velocity</code>. This is, for example, used for restarting MD from the previous run. The last atomic coordinates and velocities are printed in <code>SYSname</code>_trj.xyz in that run. (atomic coordinate also should be copied from that and put in the next input file for restart)
+></li>
+></ul>
+></dd>
+>
+><dt>file_ini_velocity; <code>Character</code>; 3d</dt>
+><dd>
+>File name for initial velocities. This is read when <code>set_ini_velocity</code> is <code>'r'</code>. The format is simply vx(iatom) vy(iatom) vz(iatom) in each line. The order of atoms must be the same as the given coordinates in the main input file. In case of using nose-hoover thermostat, a thermostat variable should be put at the last line (all atomic unit). 
+>Default is <code>none</code>.
+></dd>
+>
+><dt>file_set_shake; <code>Character</code>; 3d</dt>
+><dd>
+>Setting file for SHAKE method in ground-state MD is read. (now not supported yet)
+>Default is <code>none</code>.
+></dd>
+>
+><dt>thermostat_tau; <code>Real(8)</code>; 3d</dt>
+><dd>
+>Parameter in Nose-Hoover method: controlling time constant for temperature.
+>Default is <code>41.34[au] or 1.0[fs]</code>.
+></dd>
+>
+><dt>stop_system_momt; <code>Character</code>; 3d</dt>
+><dd>
+>Center of mass is stopped every time step.
+>Default is <code>n</code>.
+></dd>
+>
+></dl>
 
-</dl>
+>***
+
+>**Following variables are moved from the isolated part. Some of them may be added to common input, be combined to it, and be removed.**
+
+>## &group_fundamental
+><dl>
+>
+><dt>iditerybcg; <code>Integer</code>; 0d</dt>
+><dd>
+>Iterations for which ybcg is calculated if <code>&scf/amin_routine</code> is <code>'cg-diis'</code>.
+>Default is <code>20</code>.
+></dd>
+>
+><dt>iditer_nosubspace_diag; <code>Integer</code>; 0d</dt>
+><dd>
+>Iterations for which subspace diagonalization is not done if <code>&scf/subspace_diagonalization</code> is <code>'y'</code>.
+>Default is <code>10</code>.
+></dd>
+>
+><dt>ntmg; <code>Integer</code>; 0d</dt>
+><dd>
+>Number of multigrid calculation for gs. At the moment, there is a malfunction in this variable, and recovery is needed.
+>Default is <code>1</code>.
+></dd>
+>
+><dt>idisnum(2); <code>Integer</code>; 0d</dt>
+><dd>
+>Label numbers for two atoms which are measured the distance. 
+>Default is <code>(/1,2/)</code>.
+></dd>
+>
+><dt>iwrite_projection; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable for projection. 
+>Default is <code>0</code>.
+></dd>
+>
+><dt>itwproj; <code>Integer</code>; 0d</dt>
+><dd>
+>The projection is calculated every <code>itwproj</code> time steps. 
+>Default is <code>-1</code>.
+></dd>
+>
+><dt>iwrite_projnum; <code>Integer</code>; 0d</dt>
+><dd>
+>There is a malfunction in this variable.
+></dd>
+>
+><dt>itcalc_ene; <code>Integer</code>; 0d</dt>
+><dd>
+>Total energy is calculated every <code>itcalc_ene</code> time steps. There may be a malfunction in this variable.
+>Default is <code>1</code>.
+></dd>
+>
+></dl>
+
+
+>## &group_parallel
+><dl>
+>
+><dt>isequential; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine the way of assignment of processes.
+>Default is <code>2</code>.
+></dd>
+>
+><dt>imesh_s_all; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine how to use processes if total number of processes 
+>and number of processes for Hartree/Exc calculation differ. 
+>There may be a malfunction in this variable.
+>Default is <code>1</code>.
+></dd>
+>
+><dt>iflag_comm_rho; <code>Integer</code>; 0d</dt>
+><dd>
+>This variable may be removed. 
+></dd>
+>
+></dl>
+
+
+>## &group_hartree
+><dl>
+>
+><dt>hconv; <code>Real(8)</code>; 0d</dt>
+><dd>
+>A convergence value for the Hartree-cg calculation. 
+>The convergence is checked by ||tVh(i)-tVh(i-1)||<sup>2</sup>/(number of grids).
+>Default is <code>1d-15</code> a.u. (= 1.10d-13 Å<sup>3</sup>eV<sup>2</sup>)
+></dd>
+>
+><dt>lmax_meo; <code>Integer</code>; 0d</dt>
+><dd>
+>A maximum angular momentum for multipole expansion in the Hartree-cg calculation. 
+>Default is <code>4</code>.
+></dd>
+>
+></dl>
+
+
+>## &group_file
+><dl>
+>
+><dt>ic; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to check whether reentrance is done or not in the ground state calculation. 
+>Default is <code>0</code> 
+></dd>
+>
+><dt>oc; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to check whether intermediate files are generated in the ground state calculation. 
+>Default is <code>1</code>.
+></dd>
+>
+><dt>ic_rt; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to check whether reentrance is done or not in the time propagation calculation. 
+>Default is <code>0</code> 
+></dd>
+>
+><dt>oc_rt; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to check whether intermediate files are generated in the time propagation calculation. 
+>Default is <code>0</code>.
+></dd>
+>
+></dl>
+
+
+>## &group_others
+><dl>
+>
+><dt>iparaway_ob; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine the way of division for orbitals. 
+><code>1</code> is block division, and <code>2</code> is cyclic division.
+>Default is <code>2</code> 
+></dd>
+>
+><dt>iscf_order; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine the order of the calculation for the ground state one. 
+>Default is <code>1</code>.
+></dd>
+>
+><dt>iswitch_orbital_mesh; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to apply descending order for orbitals in the ground state calculation.
+>Default is <code>0</code> 
+></dd>
+>
+><dt>iflag_psicube; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to generate cube files for wave functions. This variable will be removed.
+></dd>
+>
+><dt>lambda1_diis/lambda2_diis; <code>Real(8)</code>; 0d</dt>
+><dd>
+>Parameters for the diis calculation.
+>Default is <code>0.5/0.3</code>.
+></dd>
+>
+><dt>file_ini; <code>Character</code>; 0d</dt>
+><dd>
+>A input file to align wavefunctions. 
+>Default is <code>'file_ini'</code>.
+></dd>
+>
+><dt>num_projection; <code>Interger</code>; 0d</dt>
+><dd>
+>Number of orbitals to write projections.
+>Default is <code>1</code>.
+></dd>
+>
+><dt>iwrite_projection_ob(200); <code>Interger</code>; 0d</dt>
+><dd>
+>Orbital number to be written as projections.
+>Default is <code>(1/2/3/.../200)</code>.
+></dd>
+>
+><dt>iwrite_projection_k(200); <code>Interger</code>; 0d</dt>
+><dd>
+>This variable will be removed.
+></dd>
+>
+><dt>filename_pot; <code>Character</code>; 0d</dt>
+><dd>
+>Name of file to be written local potentials. 
+>Default is <code>'pot'</code>.
+></dd>
+>
+><dt>iwrite_external; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to generate file to be written local potentials. 
+>Default is <code>0</code>.
+></dd>
+>
+><dt>iflag_dip2; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine whether dipole moments are calculated in divided area. 
+>Default is <code>0</code>.
+></dd>
+>
+><dt>iflag_intelectron; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable related to the quadrupole caluclation.
+>Default is <code>0</code>.
+></dd>
+>
+><dt>num_dip2; <code>Integer</code>; 0d</dt>
+><dd>
+>Number of area where dipole moments are calculated.
+>Default is <code>1</code>.
+></dd>
+>
+><dt>dip2boundary(100); <code>Real(8)</code>; 0d</dt>
+><dd>
+>Boundary position of area where dipole moments are calculated.
+>Default is <code>0</code> a.u.
+></dd>
+>
+><dt>dip2center(100); <code>Real(8)</code>; 0d</dt>
+><dd>
+>Origin in the dipole moment calculation. 
+>Default is <code>0</code> a.u.
+></dd>
+>
+><dt>iflag_fourier_omega; <code>integer</code>; 0d</dt>
+><dd>
+>A variable to determine whether Fourier transformation of 3d data for difference of density is calclated. 
+>Default is <code>0</code>.
+></dd>
+>
+><dt>num_fourier_omega; <code>Integer</code>; 0d</dt>
+><dd>
+>Number of energies for which the Fourier transformation is calclated. 
+>Default is <code>1</code>.
+></dd>
+>
+><dt>fourier_omega(200); <code>Real(8)</code>; 0d</dt>
+><dd>
+>Energies for which the Fourier transformation is calclated. 
+>Default is <code>0</code> a.u.
+></dd>
+>
+><dt>itotntime2; <code>Integer</code>; 0d</dt>
+><dd>
+>Number of time steps in the reentrance for real-time calculation.
+>There may be a malfunction in this variable.
+>Default is <code>0</code>.
+></dd>
+>
+><dt>iwdenoption; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine whether 3d output is generated in real-time calculation. 
+>This variable will be removed.
+></dd>
+>
+><dt>iwdenstep; <code>Integer</code>; 0d</dt>
+><dd>
+>3d output is generated every <code>iwdenstep</code> time steps.
+>This variable will be removed.
+></dd>
+>
+><dt>iflag_estatic; <code>Integer</code>; 0d</dt>
+><dd>
+>A variable to determine whether 3d output for the static electric field is generated in real-time calculation. 
+>This variable will be removed.
+></dd>
+>
+></dl>

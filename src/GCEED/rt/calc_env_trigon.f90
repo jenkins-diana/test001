@@ -40,19 +40,30 @@ subroutine calc_env_trigon(ipulse,tenv_trigon)
   else if(ipulse==2)then
     tae_shape=ae_shape2
     ! cos(theta1)**2
-    theta1=Pi/pulse_tw2*(dble(itt)*dt-t1_t2-0.5d0*pulse_tw2)
+    theta1=Pi/pulse_tw2*(dble(itt)*dt-t1_t2-0.5d0*pulse_tw1)
     alpha=Pi/pulse_tw2
     ! cos(theta2)
-    theta2=omega2*(dble(itt)*dt-t1_t2-0.5d0*pulse_tw2)+phi_cep2*2d0*pi
+    theta2=omega2*(dble(itt)*dt-t1_t2-0.5d0*pulse_tw1)+phi_cep2*2d0*pi
     beta=omega2
   end if
 
-  if(tae_shape=='Ecos2')then
-    tenv_trigon=cos(theta1)**2*cos(theta2)
-  else if(tae_shape=='Acos2')then
-    tenv_trigon=-(-alpha*sin(2.d0*theta1)*cos(theta2)   &
-                  -beta*cos(theta1)**2*sin(theta2))
-  end if
+  select case(iperiodic)
+  case(0)
+    if(tae_shape=='Ecos2')then
+      tenv_trigon=cos(theta1)**2*cos(theta2)
+    else if(tae_shape=='Acos2')then
+      tenv_trigon=-(-alpha*sin(2.d0*theta1)*cos(theta2)   &
+                    -beta*cos(theta1)**2*sin(theta2))/beta
+    end if
+  case(3)
+    if(tae_shape=='Ecos2')then
+      tenv_trigon=sin(theta2)/(2.d0*beta)   &
+                   +sin(2.d0*theta1+theta2)/(4.d0*(2.d0*alpha+beta))   &
+                   +sin(2.d0*theta1-theta2)/(4.d0*(2.d0*alpha-beta))
+    else if(tae_shape=='Acos2')then
+      tenv_trigon=cos(theta1)**2*cos(theta2)
+    end if
+  end select
     
   return
   

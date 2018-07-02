@@ -14,7 +14,7 @@
 !  limitations under the License.
 !
 subroutine calc_force
-use salmon_parallel, only: nproc_group_orbital, nproc_group_global, nproc_id_global
+use salmon_parallel, only: nproc_group_korbital, nproc_group_global, nproc_id_global
 use salmon_communication, only: comm_is_root, comm_summation
 use scf_data
 use allocate_mat_sub
@@ -27,7 +27,7 @@ real(8),allocatable :: uVpsibox(:,:,:,:),uVpsibox2(:,:,:,:)
 real(8) :: rforce1(3,MI),rforce2(3,MI),rforce3(3,MI)
 real(8) :: rab
 real(8) :: tpsi(mg_sta(1)-Nd:mg_end(1)+Nd+1,mg_sta(2)-Nd:mg_end(2)+Nd, &
-                mg_sta(3)-Nd:mg_end(3)+Nd,1:iobnum,1)
+                mg_sta(3)-Nd:mg_end(3)+Nd,1:iobnum,k_sta:k_end)
 
 do iatom=1,MI
 do j2=1,3
@@ -57,6 +57,7 @@ end do
 
 tpsi=0.d0
 do iob=1,iobnum
+!$OMP parallel do private(ix,iy,iz)
   do iz=mg_sta(3),mg_end(3)
   do iy=mg_sta(2),mg_end(2)
   do ix=mg_sta(1),mg_end(1)
@@ -73,6 +74,7 @@ do iatom=1,MI
 do j2=1,3
   rbox1=0.d0
   do iob=1,iobnum
+!$OMP parallel do private(ix,iy,iz) reduction( + : rbox1 )
     do iz=mg_sta(3),mg_end(3)
     do iy=mg_sta(2),mg_end(2)
     do ix=mg_sta(1),mg_end(1)
@@ -89,8 +91,8 @@ end do
 
 ! nonlocal part of force
 
-allocate (uVpsibox(1:iobnum,1,1:maxlm,1:MI))
-allocate (uVpsibox2(1:iobnum,1,1:maxlm,1:MI))
+allocate (uVpsibox(1:iobnum,k_sta:k_end,1:maxlm,1:MI))
+allocate (uVpsibox2(1:iobnum,k_sta:k_end,1:maxlm,1:MI))
 
 do iatom=1,MI
   do lm=1,maxlm
@@ -107,27 +109,26 @@ do iatom=1,MI
       if ( abs(uVu(lm,iatom))<1.d-5 ) cycle loop_lm2
       rbox1=0.d0
 !$OMP parallel do reduction( + : rbox1 )
-      do jj=1,max_jMps_l(iatom)
-        rbox1=rbox1+uV(jMps_l(jj,iatom),lm,iatom)*  &
-                       psi(Jxyz(1,jMps_l(jj,iatom),iatom),Jxyz(2,jMps_l(jj,iatom),iatom),  &
-                           Jxyz(3,jMps_l(jj,iatom),iatom),iob,1)
+      do jj=1,Mps(iatom)
+        rbox1=rbox1+uV(jj,lm,iatom)*  &
+                       psi(Jxyz(1,jj,iatom),Jxyz(2,jj,iatom),Jxyz(3,jj,iatom),iob,1)
       end do
       uVpsibox(iob,1,lm,iatom)=rbox1*Hvol/uVu(lm,iatom)
     end do loop_lm2
   end do
 end do
 
-call comm_summation(uVpsibox,uVpsibox2,iobnum*maxlm*MI,nproc_group_orbital)
+call comm_summation(uVpsibox,uVpsibox2,iobnum*maxlm*MI,nproc_group_korbital)
 
 do iatom=1,MI
   ikoa=Kion(iatom)
   do j2=1,3
     rbox1=0.d0
     do iob=1,iobnum
-      do jj=1,max_jMps_l(iatom)
+      do jj=1,Mps(iatom)
         do lm=1,(Mlps(ikoa)+1)**2
-          rbox1=rbox1-2.d0*rocc(iob,1)*uV(jMps_l(jj,iatom),lm,iatom)*   &
-                  rgrad_wk(Jxyz(1,jMps_l(jj,iatom),iatom),Jxyz(2,jMps_l(jj,iatom),iatom),Jxyz(3,jMps_l(jj,iatom),iatom),iob,1,j2)* &
+          rbox1=rbox1-2.d0*rocc(iob,1)*uV(jj,lm,iatom)*   &
+                  rgrad_wk(Jxyz(1,jj,iatom),Jxyz(2,jj,iatom),Jxyz(3,jj,iatom),iob,1,j2)* &
                   uVpsibox2(iob,1,lm,iatom)
         end do
       end do
@@ -137,13 +138,6 @@ do iatom=1,MI
     rforce3(j2,iatom)=rbox2*Hvol
   end do
 end do
-
-if(comm_is_root(nproc_id_global))then
-  write(*,*) "===== force ====="
-  do iatom=1,MI
-    write(*,'(i6,3e16.8)') iatom,(rforce(j2,iatom)*2.d0*Ry/a_B,j2=1,3)
-  end do
-end if
 
 deallocate(uVpsibox,uVpsibox2)
 

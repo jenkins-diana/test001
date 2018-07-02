@@ -20,6 +20,8 @@ module opt_variables
 
   integer                :: PNLx,PNLy,PNLz,PNL
   complex(8),allocatable :: zhtpsi(:,:,:),zttpsi(:,:)
+  complex(8),allocatable :: ghtpsi(:,:,:)
+  complex(8),allocatable :: spseudo(:,:),dpseudo(:,:)  ! (NPI, # of threads)
 
   real(8),allocatable :: zrhotmp(:,:)
 
@@ -31,6 +33,12 @@ module opt_variables
   integer :: STENCIL_BLOCKING_Y
 
   real(8),allocatable :: zcx(:,:),zcy(:,:),zcz(:,:)
+
+  integer,allocatable    :: nprojector(:)       ! # of projector
+  integer                :: NPI                 ! size of pseudo-vector (packed vector)
+  integer,allocatable    :: idx_proj(:)         ! projector element index
+  integer,allocatable    :: idx_lma(:)          ! start index of lma
+  integer,allocatable    :: pseudo_start_idx(:) ! start index of pseudo-vector
 
 #ifdef ARTED_STENCIL_ORIGIN
   integer,allocatable :: zifdx(:,:),zifdy(:,:),zifdz(:,:)
@@ -106,11 +114,10 @@ contains
     PNLz = NLz
     PNL  = PNLx * PNLy * PNLz
 
-#ifndef ARTED_LBLK
     allocate(zhtpsi(0:PNL-1,4,0:NUMBER_THREADS-1))
-#else
+#ifdef ARTED_LBLK
     blk_nkb_hpsi = min(at_least_parallelism/PNL + 1, NKB)
-    allocate(zhtpsi(0:PNL-1, 0:blk_nkb_hpsi-1, 4))
+    allocate(ghtpsi(0:PNL-1, 0:blk_nkb_hpsi-1, 4))
     !write(*,*) "blk_nkb_hpsi:", blk_nkb_hpsi
 
     !blk_nkb_current = min(at_least_parallelism/PNL + 1, NKB)
@@ -158,6 +165,9 @@ contains
 
 #ifdef ARTED_STENCIL_PADDING
     call init_for_padding
+    call init_projector(zKxyz)
+#else
+    call init_projector(zJxyz)
 #endif
 
 #ifdef ARTED_STENCIL_ENABLE_LOOP_BLOCKING
@@ -171,6 +181,7 @@ contains
     integer :: a,ik,ix,iy,iz,jx,jy,jz,i,j,k
     real(8) :: x,y,z,r
 
+    if(allocated(zKxyz)) deallocate(zKxyz)
     allocate(zKxyz(Nps,NI))
 
     do a=1,NI
@@ -202,6 +213,54 @@ contains
       end do
     end do
   end subroutine
+
+  function count_if_integer(vec, val) result(n)
+    implicit none
+    integer,intent(in) :: vec(:)
+    integer,intent(in) :: val
+    integer :: n, i
+    n = 0
+    do i=1,size(vec)
+      if (vec(i) == val) then
+        n = n + 1
+      end if
+    end do
+  end function
+
+  subroutine init_projector(zJxyz)
+    use global_variables
+    implicit none
+    integer,intent(in) :: zJxyz(Nps,NI)
+    integer :: i,ioffset
+
+    NPI = sum(Mps)
+
+    allocate(nprojector(NI),idx_lma(NI))
+
+    do i=1,NI
+      nprojector(i) = count_if_integer(a_tbl, i)
+    end do
+
+    idx_lma(1) = 0
+    do i=2,NI
+      idx_lma(i) = idx_lma(i-1) + nprojector(i-1)
+    end do
+
+    allocate(idx_proj(NPI))
+    allocate(pseudo_start_idx(NI))
+
+    ioffset = 0
+    do i=1,NI
+      pseudo_start_idx(i) = ioffset
+      idx_proj(ioffset+1:ioffset+Mps(i)) = zJxyz(1:Mps(i),i)
+      ioffset = ioffset + Mps(i)
+    end do
+
+    if(allocated(spseudo)) deallocate(spseudo,dpseudo)
+    allocate(spseudo(NPI,0:NUMBER_THREADS-1))
+    allocate(dpseudo(NPI,0:NUMBER_THREADS-1))
+  end subroutine
+
 
 #ifdef ARTED_LBLK
   subroutine opt_vars_init_t4ppt
@@ -290,82 +349,55 @@ contains
     STENCIL_BLOCKING_Y = floor_pow2(min(sq, PNLy))
   end subroutine
 
-  subroutine symmetric_load_balancing(NK,NK_ave,NK_s,NK_e,NK_remainder,procid,nprocs)
-    use environment
+  subroutine opt_vars_reinitialize
     implicit none
-    integer,intent(in)    :: NK
-    integer,intent(in)    :: NK_ave
-    integer,intent(inout) :: NK_s
-    integer,intent(inout) :: NK_e
-    integer,intent(inout) :: NK_remainder
-    integer,intent(in)    :: procid
-    integer,intent(in)    :: nprocs
 
-    integer :: NScpu,NSmic,NPcpu,NPmic,NPtotal
-    integer :: np,npr,pos
-
-    NPcpu   = CPU_PROCESS_PER_NODE
-    NPmic   = MIC_PROCESS_PER_NODE
-    NPtotal = NPcpu + NPmic
-
-    if (procid == 0 .and. CPU_PROCESS_PER_NODE /= MIC_PROCESS_PER_NODE) then
-      call err_finalize('CPU_PROCESS_PER_NODE /= MIC_PROCESS_PER_NODE')
-    end if
-
-    ! NK
-    NScpu = int(NK_ave * CPU_TASK_RATIO)
-    NSmic = int(NK_ave * MIC_TASK_RATIO)
-
-    NK_remainder = NK - (NScpu * (Nprocs/2) + NSmic * (Nprocs/2))
-
-    np  = procid / NPtotal * NPtotal
-    npr = mod(procid, NPtotal)
-    pos = (np / 2) * NScpu &
-    &   + (np / 2) * NSmic
-
-    if (npr < NPcpu) then
-      pos = pos + npr * NScpu
-    else
-      pos = pos + NPcpu          * NScpu
-      pos = pos + mod(npr,NPmic) * NSmic
-    end if
-    NK_s = pos
-#ifdef __MIC__
-    NK_e = pos + NSmic
-#else
-    NK_e = pos + NScpu
-#endif
-    if (procid+1 == nprocs .and. NK_remainder /= 0) then
-      NK_e = NK_e + NK_remainder
-    end if
-    NK_s = NK_s + 1
-
-    ! Error check
-    if(procid == nprocs-1 .and. NK_e /= NK) then
-      call err_finalize('prep. NK_e error')
-    end if
+    call opt_vars_finalize
+    call opt_vars_initialize_p1
+    call opt_vars_initialize_p2
   end subroutine
 
-  function is_symmetric_mode()
-    use global_variables
-    use salmon_parallel
-    use salmon_communication
+  subroutine opt_vars_finalize
     implicit none
-    integer :: is_symmetric_mode
-    logical :: arch, ret
 
-#ifdef __MIC__
-    arch = .TRUE.
-#else
-    arch = .FALSE.
+#define SAFE_DEALLOCATE(var) if(allocated(var)) deallocate(var)
+
+    SAFE_DEALLOCATE(zhtpsi)
+    SAFE_DEALLOCATE(zttpsi)
+
+    SAFE_DEALLOCATE(zrhotmp)
+    SAFE_DEALLOCATE(zJxyz)
+    SAFE_DEALLOCATE(zKxyz)
+
+    SAFE_DEALLOCATE(modx)
+    SAFE_DEALLOCATE(mody)
+    SAFE_DEALLOCATE(modz)
+
+    SAFE_DEALLOCATE(zcx)
+    SAFE_DEALLOCATE(zcy)
+    SAFE_DEALLOCATE(zcz)
+
+    SAFE_DEALLOCATE(nprojector)
+    SAFE_DEALLOCATE(idx_proj)
+    SAFE_DEALLOCATE(idx_lma)
+    SAFE_DEALLOCATE(pseudo_start_idx)
+
+#ifdef ARTED_STENCIL_ORIGIN
+    SAFE_DEALLOCATE(zifdx)
+    SAFE_DEALLOCATE(zifdy)
+    SAFE_DEALLOCATE(zifdz)
 #endif
 
-    call comm_logical_and(arch, ret, nproc_group_global)
+#ifdef ARTED_LBLK
+    SAFE_DEALLOCATE(t4ppt_nlma)
+    SAFE_DEALLOCATE(t4ppt_i2vi)
+    SAFE_DEALLOCATE(t4ppt_vi2i)
+    SAFE_DEALLOCATE(t4ppt_ilma)
+    SAFE_DEALLOCATE(t4ppt_j)
 
-    if(ret) then
-      is_symmetric_mode = 1
-    else
-      is_symmetric_mode = 0
-    end if
-  end function
+    SAFE_DEALLOCATE(t4cp_uVpsix)
+    SAFE_DEALLOCATE(t4cp_uVpsiy)
+    SAFE_DEALLOCATE(t4cp_uVpsiz)
+#endif
+  end subroutine
 end module opt_variables

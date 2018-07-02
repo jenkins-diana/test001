@@ -28,11 +28,18 @@ end if
 
 call storevpp
 
-Mps=0
+Mps_all=0
+select case(iperiodic)
+case(0)
+  call calcJxyz_all
+  call calcuV
+  call calcVpsl
+case(3)
+  call calcVpsl_periodic
+  call calcJxyz_all_periodic
+  call calcuV
+end select
 call calcJxyz
-call calcuV
-call calcVpsl
-call calcJxyz2nd
 
 return
 

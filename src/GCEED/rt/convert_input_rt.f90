@@ -23,6 +23,8 @@ implicit none
 integer :: Ntime
 real(8) :: dip_spacing
 
+ik_oddeven=2
+ilsda=ispin
 
 if(comm_is_root(nproc_id_global))then
    open(fh_namelist, file='.namelist.tmp', status='old')
@@ -47,8 +49,11 @@ case default
   stop 'invald iflag_md'
 end select
 
-allocate(wtk(1))
-wtk(:)=1.d0
+num_kpoints_3d(1:3)=num_kgrid(1:3)
+num_kpoints_rd=num_kpoints_3d(1)*num_kpoints_3d(2)*num_kpoints_3d(3)
+
+allocate(wtk(num_kpoints_rd))
+wtk(:)=1.d0/dble(num_kpoints_rd)
 
 if(iwrite_projection==1.and.itwproj==-1)then
   write(*,*) "Please specify itwproj when iwrite_projection=1."
@@ -66,7 +71,11 @@ nproc_Mxin_s = nproc_domain_s
 
 if(nproc_ob==0.and.nproc_mxin(1)==0.and.nproc_mxin(2)==0.and.nproc_mxin(3)==0.and.  &
                    nproc_mxin_s(1)==0.and.nproc_mxin_s(2)==0.and.nproc_mxin_s(3)==0) then
-  call set_numcpu_rt
+  if(ilsda==0)then
+    call set_numcpu_rt
+  else if(ilsda==1)then
+    call set_numcpu_rt_sp
+  end if
 else
   call check_numcpu
 end if
@@ -154,6 +163,13 @@ end if
 if(iwdenoption==0)then
   iwdenstep=0
 end if
+
+select case(trans_longi)
+case('lo')
+  iflag_indA=0
+case('tr')
+  iflag_indA=1
+end select
 
 if(comm_is_root(nproc_id_global))close(fh_namelist)
 

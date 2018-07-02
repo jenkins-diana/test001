@@ -92,6 +92,7 @@ contains
     use salmon_parallel
     use salmon_communication
     use timer
+    use math_constants
     implicit none
     integer,intent(in) :: iounit
 
@@ -99,6 +100,7 @@ contains
     character(*),parameter :: f = "(A,3(F12.4),F12.2)"
 
     real(8) :: src(LOG_SIZE), rmin(LOG_SIZE), rmax(LOG_SIZE), diff(LOG_SIZE), rel(LOG_SIZE)
+    integer :: i
 
     src( 1) = timer_get(LOG_DT_EVOLVE)
     src( 2) = timer_get(LOG_HPSI)
@@ -108,7 +110,8 @@ contains
     src( 6) = timer_get(LOG_TOTAL_ENERGY)
     src( 7) = timer_get(LOG_ION_FORCE)
     src( 8) = timer_get(LOG_DT_EVOLVE_AC)
-    src( 9) = timer_get(LOG_K_SHIFT_WF)
+    src( 9) = timer_get(LOG_ANA_RT_USEGS)
+!    src( 9) = timer_get(LOG_K_SHIFT_WF) !older name
     src(10) = timer_get(LOG_OTHER)
     src(11) = timer_get(LOG_ALLREDUCE)
     src(12) = timer_get(LOG_DYNAMICS)
@@ -116,24 +119,32 @@ contains
     call comm_get_min(src,rmin,LOG_SIZE,nproc_group_global)
     call comm_get_max(src,rmax,LOG_SIZE,nproc_group_global)
 
-    diff(:) = rmax(:) - rmin(:)
-    rel(:)  = rmax(:) / rmin(:)
+    do i=1,LOG_SIZE
+      if (is_zero(rmin(i))) then
+        diff(i) = 0.d0
+        rel(i)  = 0.d0
+      else
+        diff(i) = rmax(i) - rmin(i)
+        rel(i)  = rmax(i) / rmin(i)
+      end if
+    end do
 
     if (comm_is_root(nproc_id_global)) then
       write (iounit,'(A)') 'Load balance check [sec]'
       write (iounit,'(A,4(A12))') 'Function    ','min','max','diff','rel'
-      write (iounit,f)            'dt_evolve   ',rmin( 1),rmax( 1),diff( 1),rel( 1)
-      write (iounit,f)            'hpsi        ',rmin( 2),rmax( 2),diff( 2),rel( 2)
-      write (iounit,f)            'psi_rho     ',rmin( 3),rmax( 3),diff( 3),rel( 3)
-      write (iounit,f)            'hartree     ',rmin( 4),rmax( 4),diff( 4),rel( 4)
-      write (iounit,f)            'current     ',rmin( 5),rmax( 5),diff( 5),rel( 5)
-      write (iounit,f)            'total_energy',rmin( 6),rmax( 6),diff( 6),rel( 6)
-      write (iounit,f)            'ion_force   ',rmin( 7),rmax( 7),diff( 7),rel( 7)
-      write (iounit,f)            'dt_evolve_ac',rmin( 8),rmax( 8),diff( 8),rel( 8)
-      write (iounit,f)            'k_shift_wf  ',rmin( 9),rmax( 9),diff( 9),rel( 9)
-      write (iounit,f)            'other       ',rmin(10),rmax(10),diff(10),rel(10)
-      write (iounit,f)            'allreduce   ',rmin(11),rmax(11),diff(11),rel(11)
-      write (iounit,f)            'dynamics    ',rmin(12),rmax(12),diff(12),rel(12)
+      if (is_nonzero(rel( 1))) write (iounit,f) 'dt_evolve   ',rmin( 1),rmax( 1),diff( 1),rel( 1)
+      if (is_nonzero(rel( 2))) write (iounit,f) 'hpsi        ',rmin( 2),rmax( 2),diff( 2),rel( 2)
+      if (is_nonzero(rel( 3))) write (iounit,f) 'psi_rho     ',rmin( 3),rmax( 3),diff( 3),rel( 3)
+      if (is_nonzero(rel( 4))) write (iounit,f) 'hartree     ',rmin( 4),rmax( 4),diff( 4),rel( 4)
+      if (is_nonzero(rel( 5))) write (iounit,f) 'current     ',rmin( 5),rmax( 5),diff( 5),rel( 5)
+      if (is_nonzero(rel( 6))) write (iounit,f) 'total_energy',rmin( 6),rmax( 6),diff( 6),rel( 6)
+      if (is_nonzero(rel( 7))) write (iounit,f) 'ion_force   ',rmin( 7),rmax( 7),diff( 7),rel( 7)
+      if (is_nonzero(rel( 8))) write (iounit,f) 'dt_evolve_ac',rmin( 8),rmax( 8),diff( 8),rel( 8)
+      if (is_nonzero(rel( 9))) write (iounit,f) 'ana_RT_useGS',rmin( 9),rmax( 9),diff( 9),rel( 9)
+!      if (is_nonzero(rel( 9))) write (iounit,f) 'k_shift_wf  ',rmin( 9),rmax( 9),diff( 9),rel( 9)  !old name
+      if (is_nonzero(rel(10))) write (iounit,f) 'other       ',rmin(10),rmax(10),diff(10),rel(10)
+      if (is_nonzero(rel(11))) write (iounit,f) 'allreduce   ',rmin(11),rmax(11),diff(11),rel(11)
+      if (is_nonzero(rel(12))) write (iounit,f) 'dynamics    ',rmin(12),rmax(12),diff(12),rel(12)
     end if
   end subroutine
 
@@ -167,7 +178,7 @@ contains
     integer :: ncalls_in_loop
 
     select case(functional)
-      case('VS98','TPSS','TBmBJ')
+    case('VS98','TPSS','TBmBJ', 'tbmbj', "BJ_PW", "bj_pw")
         ncalls_in_loop = 3
       case default
         ncalls_in_loop = 2
@@ -229,7 +240,7 @@ contains
   end subroutine
 
   function get_stencil_FLOP(chunk_size)
-    use global_variables, only: NK_s,NK_e,NXY_s,NXY_e,NBoccmax,NL,Nt
+    use global_variables, only: NK_s,NK_e,nmacro_s,nmacro_e,NBoccmax,NL,Nt
     integer,intent(in),optional :: chunk_size
     real(8),parameter           :: FLOP = 158
 
@@ -238,16 +249,16 @@ contains
 
     if(present(chunk_size)) then
       nsize = chunk_size &
-            * (NXY_e - NXY_s + 1)
+            * (nmacro_e - nmacro_s + 1)
     else
       nsize = (NK_e  - NK_s  + 1) * NBoccmax &
-            * (NXY_e - NXY_s + 1)
+            * (nmacro_e - nmacro_s + 1)
     end if
     get_stencil_FLOP = nsize * 4*FLOP*NL * (Nt + 1)
   end function
 
   function get_pseudo_pt_FLOP(chunk_size)
-    use global_variables, only: NK_s,NK_e,NXY_s,NXY_e,NBoccmax,Nt,a_tbl,Mps
+    use global_variables, only: NK_s,NK_e,nmacro_s,nmacro_e,NBoccmax,Nt,a_tbl,Mps
     implicit none
     integer,intent(in),optional :: chunk_size
     real(8),parameter           :: FLOP_reduction = (2 + 6)     + 2
@@ -262,16 +273,16 @@ contains
 
     if(present(chunk_size)) then
       nsize = chunk_size &
-            * (NXY_e - NXY_s + 1)
+            * (nmacro_e - nmacro_s + 1)
     else
       nsize = (NK_e  - NK_s  + 1) * NBoccmax &
-            * (NXY_e - NXY_s + 1)
+            * (nmacro_e - nmacro_s + 1)
     endif
     get_pseudo_pt_FLOP = nsize * 4*FLOP * (Nt + 1)
   end function
 
   function get_update_FLOP(chunk_size)
-    use global_variables, only: NK_s,NK_e,NXY_s,NXY_e,NBoccmax,NL,Nt
+    use global_variables, only: NK_s,NK_e,nmacro_s,nmacro_e,NBoccmax,NL,Nt
     implicit none
     integer,intent(in),optional :: chunk_size
     real(8),parameter           :: FLOP = 6 + 2
@@ -281,19 +292,24 @@ contains
 
     if(present(chunk_size)) then
       nsize = chunk_size &
-            * (NXY_e - NXY_s + 1)
+            * (nmacro_e - nmacro_s + 1)
     else
       nsize = (NK_e  - NK_s  + 1) * NBoccmax &
-            * (NXY_e - NXY_s + 1)
+            * (nmacro_e - nmacro_s + 1)
     endif
     get_update_FLOP = nsize * 4*FLOP*NL * (Nt + 1)
   end function
 
-  function get_gflops(FLOP,time)
+  function get_gflops(FLOP,time) result(x)
+    use math_constants
     implicit none
     real(8),intent(in) :: FLOP
     real(8),intent(in) :: time
-    real(8) :: get_gflops
-    get_gflops = FLOP / (time * (10**9))
+    real(8) :: x
+    if (is_zero(time)) then
+      x = 0.d0
+    else
+      x = FLOP / (time * (10**9))
+    end if
   end function
 end module
